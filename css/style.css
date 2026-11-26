@@ -230,3 +230,20 @@ body.pinyin .screen { line-height: 2.1; }
 body.pinyin .r-body, body.pinyin .story { line-height: 2.3; }
 body.pinyin .msg-user rt { color: rgba(255,255,255,.75); }
 body.pinyin .daily rt { color: rgba(255,255,255,.8); }
+
+/* ===== v0.3 ===== */
+.lamp-svg { flex-shrink: 0; display: block; }
+.lamp-svg .glow { transform-box: view-box; transform-origin: 60px 52px; }
+.lamp-svg.thinking .glow { animation: glow 2s ease-in-out infinite; }
+@keyframes glow { 50% { transform: scale(1.12); opacity: .25; } }
+.sum-card { background: var(--card); border: 1.5px solid #b9dccd; border-radius: var(--radius); padding: 16px; }
+.sum-card.kid { border-color: #f2d7a6; background: #fffdf8; }
+.sum-h { display: flex; align-items: center; gap: 8px; font-size: 17px; margin-bottom: 10px; }
+.sum-card .r-lab { margin-top: 12px; }
+.sum-card .chips .chip { font-size: 13px; padding: 4px 12px; }
+.sum-list { margin: 0; padding-left: 20px; }
+.sum-list li { margin-bottom: 4px; }
+.opt-sum { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.opt-sum .pro, .opt-sum .con { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 6px; padding: 0 6px; margin-right: 6px; }
+.opt-sum .pro { background: var(--accent-bg); color: var(--accent-ink); }
+.opt-sum .con { background: var(--warn-bg); color: var(--warn); }

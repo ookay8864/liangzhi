@@ -40,7 +40,17 @@ window.AI = (function () {
       '這次的說話方式：' + version.style + '\n' +
       '可以提出 1 個好問題幫助對方繼續想。如果資訊不足，可以先問。可以用 **粗體** 和「- 」條列。\n' +
       '安全規則：如果對方提到想傷害自己或別人、正在遭受暴力、或有人有立即危險，level 設為 "urgent"，回應要先關心他的安全，請他立刻聯絡身邊信任的人或撥打求助電話（緊急 110，心理援助 12356），不要繼續一般分析。涉及法律、醫療、財務的重大問題，提醒尋求專業人士。\n' +
-      '只輸出 JSON，格式：{"level":"normal|urgent","reply":"你的回答"}';
+      '只輸出 JSON，格式：{"level":"normal|urgent","reply":"你的回答","options":["使用者可能想接著說的話1","2","3"]}\n' +
+      'options 給 2 到 3 個使用者可能想接著說或問的短句（每個 15 字以內，用第一人稱），幫助他繼續深入想。';
+  }
+
+  function summarySystem(kind, kid) {
+    if (kind === 'kid') {
+      return '你是「' + NAME + '」，一個圓圓的小羅盤。請把剛才和小朋友（' + kid.name + '）的對話，整理成一張給 6 到 9 歲孩子看的小卡片。' + core('kid') + '\n' + KID_STYLE +
+        '只輸出 JSON：{"happened":"發生了什麼事（1 到 2 句）","feelings":[{"who":"","mood":"happy|sad|worried|angry|calm|proud|scared|surprised","text":"2 到 6 字"}],"cando":["我可以怎麼做（2 到 3 個，每個 15 字以內）"],"encourage":"一句溫暖的鼓勵，並溫柔提醒也可以跟爸爸媽媽說說"}';
+    }
+    return '請把剛才的對話整理成一份清楚的思考小結，幫助使用者看清自己的想法。' + core('adult') + '\n' +
+      '只輸出 JSON：{"dilemma":"核心的兩難（1 句）","values":["使用者在乎的價值（2 到 4 個短詞）"],"options":[{"name":"選擇","pros":"好處","cons":"代價"}],"leaning":"從對話看，他目前比較傾向哪一邊（如果看不出來就說還在考慮）","next":"一個具體的下一步建議"}';
   }
 
   // 情境卡的 D 選項：使用者自己寫的答案
@@ -93,12 +103,20 @@ window.AI = (function () {
     },
     async adult(versionId, history) {
       const v = CONFIG.versions.adult.find(x => x.id === versionId) || CONFIG.versions.adult[0];
-      return call(adultSystem(v), history);
+      const r = await call(adultSystem(v), history);
+      r.options = Array.isArray(r.options) ? r.options.slice(0, 3) : [];
+      return r;
     },
     async sceneOwn(kind, kid, step, answer, sillyCount) {
       const msg = '情境：' + step.story + '\n問題：' + step.question + '\n提供的選項：' + step.options.map(o => o.text).join('／') + '\n我自己的做法：' + answer;
       const r = await call(sceneSystem(kind, kid, sillyCount), [{ role: 'user', content: msg }]);
       if (localUrgent(answer)) { r.level = 'urgent'; r.silly = false; }
+      r.feelings = Array.isArray(r.feelings) ? r.feelings.slice(0, 3) : [];
+      return r;
+    },
+    async summary(kind, kid, history) {
+      const h = history.concat([{ role: 'user', content: '請幫我整理一下剛才想到的。' }]);
+      const r = await call(summarySystem(kind, kid), h);
       r.feelings = Array.isArray(r.feelings) ? r.feelings.slice(0, 3) : [];
       return r;
     },

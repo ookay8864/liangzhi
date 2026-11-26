@@ -49,6 +49,14 @@
       '<ellipse cx="40" cy="73" rx="5" ry="3" fill="#F4C0D1"/><ellipse cx="80" cy="73" rx="5" ry="3" fill="#F4C0D1"/>' +
       '<path d="M53 74 Q60 81 67 74" fill="none" stroke="#2C2C2A" stroke-width="2.5" stroke-linecap="round"/></svg>';
   }
+  // 大人版：心中一盞燈（綠色燈座），思考時光暈一明一暗
+  function lamp(size, thinking) {
+    size = size || 44;
+    return '<svg class="lamp-svg' + (thinking ? ' thinking' : '') + '" width="' + size + '" height="' + size + '" viewBox="0 0 120 120" aria-hidden="true">' +
+      '<rect width="120" height="120" rx="28" fill="#E6F4EE"/><circle class="glow" cx="60" cy="52" r="26" fill="#FAC775" opacity=".5"/>' +
+      '<circle cx="60" cy="52" r="15" fill="#EF9F27"/><rect x="51" y="72" width="18" height="7" rx="3.5" fill="#0F6E56"/>' +
+      '<rect x="53" y="82" width="14" height="6" rx="3" fill="#0F6E56"/></svg>';
+  }
   function render(html, opts) {
     Voice.stop();
     opts = opts || {};
@@ -110,7 +118,9 @@
 
   // ---------- 首頁 ----------
   function home() {
-    if (Store.settings().deviceMode === 'kid') return kidPick();
+    const mode = Store.settings().deviceMode;
+    if (mode === 'kid') return kidPick();
+    if (mode === 'adult') return adultHome();
     render(
       '<div class="screen"><div class="hero"><div class="logo-buddy">' + buddy(76) + '</div>' +
       '<h2>' + esc(C.appName) + '</h2><p>' + esc(C.appSubtitle) + '</p></div>' +
@@ -348,7 +358,7 @@
     const greet = isKid ? '嗨，' + kid.name + '！今天有什麼想跟我說的嗎？開心的、不開心的都可以喔。' : '把你正在猶豫的事寫下來或說出來。不用整理得很完整，我們一步一步想。';
     render(top(isKid ? '說說我的煩惱' : '說出我的困境', base, isKid ? starPill(kid) : '') +
       '<div class="screen" style="padding-bottom:' + (isKid ? '150px' : '40px') + '">' +
-      '<div class="buddy">' + (isKid ? buddy(44) : '<div class="buddy-face">🧭</div>') + '<div class="msg-ai" style="flex:1"><div class="body"><p>' + esc(greet) + '</p></div><div class="foot">' + speakBtn(greet) + '</div></div></div>' +
+      '<div class="buddy">' + (isKid ? buddy(44) : lamp(44)) + '<div class="msg-ai" style="flex:1"><div class="body"><p>' + esc(greet) + '</p></div><div class="foot">' + speakBtn(greet) + '</div></div></div>' +
       '<div class="label" style="margin-top:8px">' + (isKid ? esc(NAME) + '用什麼方式回答你？' : '回答方式（可選 1 到 3 個）') + '</div>' +
       '<div class="chips" id="vchips">' + versions.map(v => '<button class="chip' + (selected.includes(v.id) ? ' on' : '') + '" data-v="' + v.id + '">' + esc(v.name) + '</button>').join('') + '</div>' +
       '<div class="small muted" id="vdesc" style="margin-top:6px">' + esc(versions[0].desc) + '</div>' +
@@ -376,9 +386,41 @@
       const h = [];
       msgs.slice(0, uptoIndex).forEach(m => {
         if (m.role === 'user') h.push({ role: 'user', content: m.text });
-        else { const r = m.v[m.active]; if (r && r.reply) h.push({ role: 'assistant', content: r.reply }); }
+        else if (m.role === 'ai') { const r = m.v[m.active]; if (r && r.reply) h.push({ role: 'assistant', content: r.reply }); }
       });
       return h;
+    }
+    const rounds = () => msgs.filter(m => m.role === 'user').length;
+    let summarizedAt = 0;
+    async function summarize() {
+      if (busy) return;
+      busy = true; comp.fit();
+      const entry = { role: 'summary', loading: true }; msgs.push(entry); draw();
+      try { entry.data = await AI.summary(kind, kid, history(msgs.length - 1)); }
+      catch (e) { entry.error = AI.errorText(e); }
+      entry.loading = false; busy = false; summarizedAt = rounds();
+      if (entry.data && record) { record.summaryCard = entry.data; Store.saveRecord(record); }
+      comp.fit(); draw();
+    }
+    function summaryHtml(e) {
+      if (e.loading) return '<div class="sum-card"><div class="thinking-row">' + (isKid ? buddy(36, true) : lamp(36, true)) + '<span class="typing">正在整理</span></div></div>';
+      if (e.error) return '<div class="sum-card"><p>' + esc(e.error) + '</p></div>';
+      const d = e.data || {};
+      if (isKid) {
+        const say = (d.happened || '') + '。' + (d.feelings || []).map(f => f.who + '，' + f.text).join('。') + '。我可以：' + (d.cando || []).join('，') + '。' + (d.encourage || '');
+        return '<div class="sum-card kid"><div class="sum-h">' + buddy(30) + '<b>今天我想到了</b></div>' +
+          '<div class="r-lab">發生了什麼事</div><div class="r-body">' + esc(d.happened) + '</div>' +
+          ((d.feelings || []).length ? '<div class="r-lab">大家的心情</div>' + feelingsHtml(d.feelings) : '') +
+          '<div class="r-lab">我可以怎麼做</div><ul class="sum-list">' + (d.cando || []).map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' +
+          '<div class="think-box">' + esc(d.encourage) + '</div><div style="margin-top:10px">' + speakBtn(say) + '</div></div>';
+      }
+      const say = '核心的兩難：' + (d.dilemma || '') + '。我在乎的：' + (d.values || []).join('、') + '。' + (d.options || []).map(o => o.name + '，好處是' + o.pros + '，代價是' + o.cons).join('。') + '。目前傾向：' + (d.leaning || '') + '。下一步：' + (d.next || '');
+      return '<div class="sum-card"><div class="sum-h">' + lamp(30) + '<b>我的思考小結</b></div>' +
+        '<div class="r-lab">核心的兩難</div><div class="r-body">' + esc(d.dilemma) + '</div>' +
+        '<div class="r-lab">我在乎的</div><div class="chips">' + (d.values || []).map(v => '<span class="chip">' + esc(v) + '</span>').join('') + '</div>' +
+        '<div class="r-lab">各個選擇</div>' + (d.options || []).map(o => '<div class="opt-sum"><b>' + esc(o.name) + '</b><div class="small"><span class="pro">好處</span>' + esc(o.pros) + '</div><div class="small"><span class="con">代價</span>' + esc(o.cons) + '</div></div>').join('') +
+        '<div class="r-lab">目前傾向</div><div>' + esc(d.leaning) + '</div>' +
+        '<div class="think-box" style="margin-top:12px">下一步：' + esc(d.next) + '</div><div style="margin-top:10px">' + speakBtn(say) + '</div></div>';
     }
     async function gen(msgIndex, vid) {
       const m = msgs[msgIndex];
@@ -399,10 +441,11 @@
       const results = await Promise.all(selected.map(v => gen(idx, v)));
       busy = false;
       const main = results.find(r => r && !r.error);
+      if (main) { const ip = document.querySelector('#composer .inp'); if (ip) ip.setAttribute('placeholder', Lang.conv(isKid ? '還想說什麼嗎？寫下來或按麥克風' : '繼續說說你的想法…')); }
       if (main && isKid) {
         if (main.silly) sillyCount++; else { sillyCount = 0; giveStars(kid, 1); }
         record = saveKidRecord(kid, record, text, main, {
-          messages: msgs.map(m => m.role === 'user' ? { role: 'user', text: m.text } : { role: 'ai', text: (m.v[m.active] || {}).reply || '' })
+          messages: msgs.filter(m => m.role !== 'summary').map(m => m.role === 'user' ? { role: 'user', text: m.text } : { role: 'ai', text: (m.v[m.active] || {}).reply || '' })
         });
         if (sillyCount >= 3) paused = true;
       }
@@ -411,38 +454,47 @@
     function draw() {
       chat.innerHTML = msgs.map((m, i) => {
         if (m.role === 'user') return '<div class="msg-user">' + esc(m.text) + '</div>';
+        if (m.role === 'summary') return '<div class="ai-wrap">' + summaryHtml(m) + '</div>';
         const tabs = (m.order.length > 1 || !isKid) ?
           '<div class="tabs">' + m.order.map(v => '<button class="tab' + (v === m.active ? ' on' : '') + '" data-m="' + i + '" data-tab="' + v + '">' + esc(versions.find(x => x.id === v).name) + '</button>').join('') +
           (!isKid && m.order.length < versions.length ? '<button class="tab add" data-m="' + i + '" data-add="1">＋ 其他角度</button>' : '') + '</div>' : '';
         const r = m.v[m.active] || {};
         let body;
-        if (r.loading) body = '<div class="thinking-row">' + (isKid ? buddy(36, true) : '') + '<span class="typing">' + (isKid ? esc(NAME) + '想一想' : '思考中') + '</span></div>';
+        if (r.loading) body = '<div class="thinking-row">' + (isKid ? buddy(36, true) : lamp(36, true)) + '<span class="typing">' + (isKid ? esc(NAME) + '想一想' : '思考中') + '</span></div>';
         else if (r.error) body = '<div class="body"><p>' + esc(r.error) + '</p></div>';
         else body = '<div class="body">' + md(r.reply || '') + '</div><div class="foot">' + speakBtn(r.reply || '') + '</div>';
         let extra = '';
         if (!r.loading && !r.error && i === msgs.length - 1) {
           if (isKid && r.level === 'urgent') extra += '<div class="notice urgent">這件事很重要，' + esc(kid.name) + '。要不要現在就去找爸爸媽媽說？<div style="margin-top:8px"><button class="btn danger" data-go="/kid/' + kid.id + '/help">找爸爸媽媽幫忙</button></div></div>';
           if (!isKid && r.level === 'urgent') extra += '<div class="notice urgent"><b>你的安全最重要。</b>請聯絡身邊信任的人，或撥打以下電話：' + hotlinesHtml() + '</div>';
-          if (isKid && !paused && r.options && r.options.length) extra += '<div class="quick">' + r.options.map(o => '<button data-quick="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>';
+          if (!paused && r.options && r.options.length) extra += '<div class="quick">' + r.options.map(o => '<button data-quick="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>';
         }
-        return '<div class="ai-wrap">' + (isKid ? '<div class="ai-row">' + buddy(30) + '<div class="msg-ai">' + tabs + body + '</div></div>' : '<div class="msg-ai">' + tabs + body + '</div>') + extra + '</div>';
+        return '<div class="ai-wrap">' + '<div class="ai-row">' + (isKid ? buddy(30) : lamp(30)) + '<div class="msg-ai">' + tabs + body + '</div></div>' + extra + '</div>';
       }).join('');
 
       let tail = '';
+      const n = rounds(), lastIsAi = msgs.length && msgs[msgs.length - 1].role === 'ai';
+      if (!paused && !busy && lastIsAi && n >= 3) {
+        if (n >= 5 && summarizedAt < 5) tail += '<div class="notice info" style="margin-top:14px">' + (isKid ? '我們聊了好多喔！要不要一起看看今天想到了什麼？' : '已經聊了好幾輪了，要不要整理一下目前的想法？') + '<div style="margin-top:8px"><button class="btn accent" id="doSum">整理我的思考</button></div></div>';
+        else tail += '<div style="margin-top:14px"><button class="btn ghost" id="doSum">整理我的思考</button></div>';
+      }
       if (paused) tail = '<div class="result center" style="margin-top:16px">' + esc(NAME) + '有點累了，我們休息一下，下次再一起想吧！<div style="margin-top:12px"><button class="btn" data-go="/kid/' + kid.id + '/scenes">去玩情境卡</button><button class="btn ghost" data-go="/kid/' + kid.id + '">回到首頁</button></div></div>';
-      else if (!isKid && msgs.length && !busy) tail = '<div style="margin-top:14px"><button class="btn ghost" id="saveAdult">' + (record ? '已存到我的紀錄 ✓' : '存到我的紀錄（只有家長密碼能看）') + '</button></div>';
+      else if (!isKid && msgs.length && !busy) tail += '<div style="margin-top:10px"><button class="btn ghost" id="saveAdult">' + (record ? '已存到我的紀錄 ✓' : '存到我的紀錄（只有家長密碼能看）') + '</button></div>';
       document.getElementById('tail').innerHTML = tail;
+      const ds = document.getElementById('doSum'); if (ds) ds.onclick = summarize;
       const sa = document.getElementById('saveAdult');
       if (sa) sa.onclick = () => {
         if (!Secure.hasPassword()) { toast('請先到家長專區設定密碼'); return; }
         if (!record) record = { id: Store.uid(), type: 'adult-talk', time: Date.now(), level: 'normal' };
-        record.messages = msgs.map(m => m.role === 'user' ? { role: 'user', text: m.text } : { role: 'ai', text: (m.v[m.active] || {}).reply || '' });
+        record.messages = msgs.filter(m => m.role !== 'summary').map(m => m.role === 'user' ? { role: 'user', text: m.text } : { role: 'ai', text: (m.v[m.active] || {}).reply || '' });
+        const lastSum = msgs.filter(m => m.role === 'summary' && m.data).pop();
+        if (lastSum) record.summaryCard = lastSum.data;
         record.summary = msgs[0].text.slice(0, 40);
         Store.saveRecord(record); draw(); toast('已儲存');
       };
       chat.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { msgs[+b.dataset.m].active = b.dataset.tab; draw(); });
       chat.querySelectorAll('[data-add]').forEach(b => b.onclick = () => pickExtra(+b.dataset.m));
-      chat.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => send(b.dataset.quick));
+      chat.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => (/整理/.test(b.dataset.quick) && rounds() >= 2) ? summarize() : send(b.dataset.quick));
       if (msgs.length) document.getElementById('composer').scrollIntoView({ block: 'end', behavior: 'smooth' });
     }
     function pickExtra(i) {
@@ -485,13 +537,16 @@
 
   // ---------- 大人首頁 ----------
   function adultHome() {
-    render(top('', '/') +
-      '<div class="screen"><div class="buddy"><div class="buddy-face">🧭</div><div style="padding-top:4px"><b>遇到兩難了嗎？</b><br><span class="muted">很多事沒有標準答案，我們一起想清楚。</span></div></div>' +
+    const adultMode = Store.settings().deviceMode === 'adult';
+    const urgent = Store.records().filter(r => r.kidId && r.level === 'urgent' && !r.seen).length;
+    render(top('', adultMode ? '' : '/') +
+      '<div class="screen"><div class="buddy">' + lamp(48) + '<div style="padding-top:4px"><b>遇到兩難了嗎？</b><br><span class="muted">很多事沒有標準答案，我們一起想清楚。</span></div></div>' +
       '<div style="height:12px"></div>' +
+      '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">👨‍👩‍👦</span><span><div class="t">孩子的紀錄' + (urgent ? ' <span class="badge urgent">' + urgent + ' 則需要關心</span>' : '') + '</div><div class="d">查看孩子的煩惱和情境練習（需要密碼）</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult/talk"><span class="ic">✍️</span><span><div class="t">說出我的困境</div><div class="d">寫下或說出你正在猶豫的事</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult/scenes"><span class="ic" style="background:#faeeda">🎲</span><span><div class="t">情境練習</div><div class="d">從常見的兩難情境開始</div></span><span class="arrow">›</span></button>' +
-      '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">🔒</span><span><div class="t">家長專區</div><div class="d">孩子的紀錄、我的紀錄、設定</div></span><span class="arrow">›</span></button>' +
-      '<p class="small muted center" style="margin-top:20px">對話內容只存在這支手機上，除非你選擇儲存。</p></div>');
+      '<p class="small muted center" style="margin-top:20px">對話內容只存在這支手機上，除非你選擇儲存。</p>' +
+      '<div class="foot-note">' + (adultMode ? '<a href="#/kid" style="color:inherit">小孩版</a> · ' : '') + '<a href="#/about" style="color:inherit">我們的原則</a></div></div>');
   }
 
   // ---------- 家長專區 ----------
@@ -565,6 +620,7 @@
       '<div class="screen"><div class="row muted small" style="margin-bottom:8px">' + timeStr(r.time) + ' · <span class="badge ' + (r.level || 'normal') + '">' + (levelName[r.level] || '') + '</span></div>' +
       (r.summary ? '<div class="notice info"><b>摘要：</b>' + esc(r.summary) + '</div>' : '') +
       (r.parentTip ? '<div class="notice privacy"><b>怎麼開口：</b>' + esc(r.parentTip) + '</div>' : '') +
+      (r.summaryCard ? '<div class="label">整理的小結</div><div class="story" style="font-size:15px">' + esc(Object.values(r.summaryCard).map(v => Array.isArray(v) ? v.map(x => typeof x === 'object' ? Object.values(x).join('：') : x).join('、') : v).join('\n')).replace(/\n/g, '<br>') + '</div>' : '') +
       (r.picks ? '<div class="label">孩子的選擇</div><div class="story" style="font-size:15px">' + r.picks.map(esc).join('<br>') + '</div>' : '') +
       (r.kidText && !r.messages ? '<div class="label">孩子說的話</div><div class="story" style="font-size:15px;white-space:pre-wrap">' + esc(r.kidText) + '</div>' : '') +
       (r.messages ? '<div class="label">對話內容</div><div class="chat">' + r.messages.map(m =>
@@ -583,8 +639,8 @@
     const seg = (id, val, opts) => '<div class="seg" id="' + id + '">' + opts.map(o => '<button data-val="' + o[0] + '" class="' + (val === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div>';
     render(top('設定', '/parent') +
       '<div class="screen">' +
-      '<div class="label">這支手機給誰用</div>' + seg('deviceMode', s.deviceMode, [['kid', '孩子'], ['normal', '一般']]) +
-      '<div class="help small muted" style="margin-top:-6px">選「孩子」：打開網站就直接選孩子的名字，看不到大人版。</div>' +
+      '<div class="label">這支手機給誰用</div>' + seg('deviceMode', s.deviceMode, [['kid', '孩子'], ['adult', '大人'], ['normal', '一般']]) +
+      '<div class="help small muted" style="margin-top:-6px">孩子：打開就直接選孩子的名字。大人：打開就是大人版和孩子的紀錄。一般：先選小朋友或大人。</div>' +
 
       '<div class="label">文字</div>' +
       '<div class="field"><label>小孩版</label>' + seg('kidScript', s.kidScript, [['hans', '簡體'], ['hant', '繁體']]) + '</div>' +
