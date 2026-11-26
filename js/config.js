@@ -5,8 +5,8 @@
 window.CONFIG = {
   appName: '良知旋轉盤',
   appSubtitle: '遇到兩難的時候，陪你想清楚',
-  kidCharacter: '小良',
-  version: '0.1.1',
+  kidCharacter: '轉轉',
+  version: '0.2.0',
 
   // 預設的孩子（家長專區可以修改、新增）
   defaultKids: [
@@ -21,8 +21,6 @@ window.CONFIG = {
     temperature: 0.7
   },
 
-  // 語音：辨識與朗讀用的語言
-  speechLang: 'zh-TW',
 
   // 每日摘要預設時間（24 小時制）
   summaryHour: 20,

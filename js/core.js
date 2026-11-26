@@ -21,7 +21,8 @@ window.Store = (function () {
     setKids(v) { set('kids', v); },
     kid(id) { return this.kids().find(k => k.id === id); },
     settings() {
-      return Object.assign({ apiKey: '', webhook: '', summaryHour: CONFIG.summaryHour, notifyOn: true }, get('settings', {}));
+      return Object.assign({ apiKey: '', webhook: '', summaryHour: CONFIG.summaryHour, notifyOn: true,
+        kidScript: 'hans', adultScript: 'hant', deviceMode: 'normal' }, get('settings', {}));
     },
     saveSettings(s) { set('settings', s); },
     records() { return get('records', []); },
@@ -33,9 +34,112 @@ window.Store = (function () {
     },
     deleteRecord(id) { set('records', this.records().filter(r => r.id !== id)); },
     stars(kidId) { return get('stars_' + kidId, 0); },
-    addStars(kidId, n) { const v = this.stars(kidId) + n; set('stars_' + kidId, v); return v; },
+    // 加星星；每集滿 10 顆送一張特別貼紙，回傳 { stars, special }
+    addStars(kidId, n) {
+      const before = this.stars(kidId), v = before + n; set('stars_' + kidId, v);
+      let special = null;
+      if (Math.floor(v / 10) > Math.floor(before / 10)) special = this.addSticker(kidId, 'special');
+      return { stars: v, special };
+    },
+    stickers(kidId) { return get('stickers_' + kidId, []); },
+    addSticker(kidId, kind) {
+      const have = this.stickers(kidId);
+      const pool = STICKERS[kind].filter(s => !have.some(h => h.s === s));
+      const s = (pool.length ? pool : STICKERS[kind])[Math.floor(Math.random() * (pool.length || STICKERS[kind].length))];
+      have.push({ s, kind, time: Date.now() }); set('stickers_' + kidId, have);
+      return s;
+    },
+    played(kidId) { return get('played_' + kidId, []); },
+    markPlayed(kidId, sid) { const p = this.played(kidId); if (!p.includes(sid)) { p.push(sid); set('played_' + kidId, p); } },
     clearAll() {
       Object.keys(localStorage).filter(k => k.indexOf(P) === 0).forEach(k => localStorage.removeItem(k));
+    }
+  };
+})();
+
+
+// ---------- 文字：繁體／簡體、拼音 ----------
+window.Lang = (function () {
+  const D = window.ZH_DATA || { t2s: '', t2sp: {}, py: {}, pyp: {} };
+  const T2S = {}; { const a = Array.from(D.t2s); for (let i = 0; i + 1 < a.length; i += 2) T2S[a[i]] = a[i + 1]; }
+  const PY = {}; Object.keys(D.py).forEach(r => { for (const c of D.py[r]) PY[c] = r; });
+  const TP = Object.keys(D.t2sp).sort((a, b) => b.length - a.length);
+  const CJK = /[㐀-鿿]/;
+  let zone = 'adult', kidPinyin = false;
+
+  function script() { const s = Store.settings(); return zone === 'kid' ? s.kidScript : s.adultScript; }
+  function conv(text) {
+    if (!text || script() !== 'hans') return text;
+    let t = String(text);
+    for (const p of TP) if (t.indexOf(p) >= 0) t = t.split(p).join(D.t2sp[p]);
+    let out = ''; for (const c of t) out += T2S[c] || c; return out;
+  }
+  function pinyinFrag(text) {
+    const frag = document.createDocumentFragment();
+    const chars = Array.from(text); let buf = '';
+    const flush = () => { if (buf) { frag.appendChild(document.createTextNode(buf)); buf = ''; } };
+    for (let i = 0; i < chars.length;) {
+      if (!CJK.test(chars[i])) { buf += chars[i++]; continue; }
+      flush();
+      let reads = null, len = 1;
+      for (let L = 3; L >= 2; L--) {
+        const w = chars.slice(i, i + L).join('');
+        if (w.length === L && D.pyp[w]) { reads = D.pyp[w].split(' '); len = L; break; }
+      }
+      for (let k = 0; k < len; k++) {
+        const c = chars[i + k], r = reads ? reads[k] : PY[c] || PY[T2S[c]] || '';
+        const ruby = document.createElement('ruby'); ruby.textContent = c;
+        const rt = document.createElement('rt'); rt.textContent = r; ruby.appendChild(rt);
+        frag.appendChild(ruby);
+      }
+      i += len;
+    }
+    flush(); return frag;
+  }
+  const SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, RT: 1, RUBY: 1, svg: 1, SVG: 1 };
+  function localize(root) {
+    if (!root) return;
+    const hans = script() === 'hans', py = zone === 'kid' && kidPinyin;
+    if (!hans && !py) return;
+    if (root.nodeType === 1) {
+      root.querySelectorAll && root.querySelectorAll('[placeholder]').forEach(el => {
+        const v = conv(el.getAttribute('placeholder')); if (v !== el.getAttribute('placeholder')) el.setAttribute('placeholder', v);
+      });
+    }
+    const nodes = [];
+    if (root.nodeType === 3) nodes.push(root);
+    else {
+      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(n) {
+          for (let p = n.parentNode; p && p !== document.body; p = p.parentNode) {
+            if (SKIP[p.nodeName] || (p.classList && (p.classList.contains('lzpy') || p.classList.contains('no-py')))) return NodeFilter.FILTER_REJECT;
+          }
+          return CJK.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      while (w.nextNode()) nodes.push(w.currentNode);
+    }
+    nodes.forEach(n => {
+      if (!n.parentNode) return;
+      const t = conv(n.nodeValue);
+      if (py) {
+        const span = document.createElement('span'); span.className = 'lzpy';
+        span.appendChild(pinyinFrag(t)); n.parentNode.replaceChild(span, n);
+      } else if (t !== n.nodeValue) n.nodeValue = t;
+    });
+  }
+  return {
+    conv, localize,
+    setZone(z, pinyin) { zone = z; kidPinyin = !!pinyin; document.body.dataset.zone = z; document.body.classList.toggle('pinyin', z === 'kid' && !!pinyin); },
+    zone() { return zone; },
+    script,
+    speechLang() { return script() === 'hans' ? 'zh-CN' : 'zh-TW'; },
+    observe(el) {
+      new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => {
+        if (n.nodeType === 1 && n.classList.contains('lzpy')) return;
+        if (n.nodeType === 3 && n.parentNode && n.parentNode.closest && n.parentNode.closest('.lzpy,textarea,rt')) return;
+        localize(n);
+      }))).observe(el, { childList: true, subtree: true });
     }
   };
 })();
@@ -111,7 +215,8 @@ window.Voice = (function () {
   let current = null;
   function pickVoice() {
     const vs = speechSynthesis.getVoices();
-    return vs.find(v => v.lang === CONFIG.speechLang) || vs.find(v => /^zh/i.test(v.lang)) || null;
+    const L = Lang.speechLang();
+    return vs.find(v => v.lang === L) || vs.find(v => v.lang.replace('_', '-') === L) || vs.find(v => /^zh/i.test(v.lang)) || null;
   }
   return {
     canSpeak: 'speechSynthesis' in window,
@@ -120,8 +225,8 @@ window.Voice = (function () {
       if (!this.canSpeak) return;
       if (current === btn) { this.stop(); return; }
       this.stop();
-      const u = new SpeechSynthesisUtterance(text.replace(/[*#>-]/g, ''));
-      u.lang = CONFIG.speechLang; const v = pickVoice(); if (v) u.voice = v;
+      const u = new SpeechSynthesisUtterance(Lang.conv(text).replace(/[*#>]/g, ''));
+      u.lang = Lang.speechLang(); const v = pickVoice(); if (v) u.voice = v;
       u.rate = 0.95;
       u.onend = u.onerror = () => { if (btn) btn.classList.remove('playing'); current = null; };
       current = btn; if (btn) btn.classList.add('playing');
@@ -135,7 +240,7 @@ window.Voice = (function () {
     listen(onText, onEnd) {
       const R = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!R) return null;
-      const r = new R(); r.lang = CONFIG.speechLang; r.interimResults = true; r.continuous = false;
+      const r = new R(); r.lang = Lang.speechLang(); r.interimResults = true; r.continuous = false;
       let finalText = '';
       r.onresult = e => {
         let interim = '';
