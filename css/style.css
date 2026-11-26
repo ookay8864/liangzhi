@@ -247,3 +247,18 @@ body.pinyin .daily rt { color: rgba(255,255,255,.8); }
 .opt-sum .pro, .opt-sum .con { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 6px; padding: 0 6px; margin-right: 6px; }
 .opt-sum .pro { background: var(--accent-bg); color: var(--accent-ink); }
 .opt-sum .con { background: var(--warn-bg); color: var(--warn); }
+
+/* ===== v0.4 ===== */
+.comp-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; position: relative; }
+.ver-btn { font-size: 13px; color: var(--muted); padding: 6px 10px; border-radius: 16px; background: #efede7; }
+.sum-pill { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 16px; border: 1px solid #b9dccd; background: var(--card); color: var(--accent-ink); }
+.sum-pill.hot { background: var(--accent); color: #fff; border-color: var(--accent); animation: pop .5s ease; }
+.sum-pill[hidden], .ver-panel[hidden] { display: none; }
+.ver-panel { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.08); z-index: 5; }
+.inputbox { align-items: stretch; padding: 10px 8px 8px 14px; border-radius: 18px; }
+.inputbox textarea { min-height: 76px; font-size: 16px; }
+.ib-btns { display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.tip { font-size: 12px; color: #633806; background: var(--gold-bg); border-radius: 10px; padding: 8px 10px; margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+.tip-x { margin-left: auto; font-size: 12px; font-weight: 600; color: #633806; white-space: nowrap; }
+.hint:empty { display: none; }
+.small-btn { padding: 11px; font-size: 14px; }

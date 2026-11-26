@@ -320,29 +320,36 @@
   }
 
   // ---------- 輸入框（打字＋麥克風） ----------
-  function composerHtml(ph) {
-    return '<div class="inputbox"><textarea class="inp" rows="1" placeholder="' + esc(ph) + '"></textarea>' +
-      '<button class="icon-btn mic" aria-label="語音輸入">🎤</button><button class="icon-btn send" aria-label="送出" disabled>↑</button></div>' +
-      '<div class="hint">' + (Voice.canListen ? '' : '也可以按鍵盤上的麥克風說話') + '</div>';
+  function composerHtml(ph, topHtml) {
+    const tip = Store.get('tipDictation', false) ? '' :
+      '<div class="tip">小技巧：也可以用鍵盤右下角的 🎤 聽寫，比較準，可以一次說很長。<button class="tip-x">知道了</button></div>';
+    return (topHtml ? '<div class="comp-top">' + topHtml + '</div>' : '') +
+      '<div class="inputbox"><textarea class="inp" rows="3" placeholder="' + esc(ph) + '"></textarea>' +
+      '<div class="ib-btns"><button class="icon-btn mic" aria-label="語音輸入">🎤</button><button class="icon-btn send" aria-label="送出" disabled>↑</button></div></div>' +
+      '<div class="hint"></div>' + tip;
   }
   function bindComposer(root, onSend, canSend) {
     const inp = root.querySelector('.inp'), send = root.querySelector('.send'), mic = root.querySelector('.mic'), hint = root.querySelector('.hint');
     canSend = canSend || (() => true);
-    function fit() { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 140) + 'px'; send.disabled = !inp.value.trim() || !canSend(); }
+    const tx = root.querySelector('.tip-x');
+    if (tx) tx.onclick = () => { Store.set('tipDictation', true); tx.parentNode.remove(); };
+    function fit() { inp.style.height = 'auto'; inp.style.height = Math.max(76, Math.min(inp.scrollHeight, 210)) + 'px'; send.disabled = !inp.value.trim() || !canSend(); }
     inp.oninput = fit; fit();
-    let rec = null;
+    let rec = null, timer = null;
+    const noVoice = '沒有聽到聲音。可以改用鍵盤右下角的 🎤 聽寫，會更準喔';
     mic.onclick = () => {
       if (rec) { rec.stop(); return; }
-      if (!Voice.canListen) { toast('請按鍵盤上的麥克風說話'); inp.focus(); return; }
-      const before = inp.value;
+      if (!Voice.canListen) { hint.textContent = Lang.conv('請按鍵盤右下角的 🎤 說話'); inp.focus(); return; }
+      const before = inp.value; let got = false;
       mic.classList.add('on'); hint.textContent = Lang.conv('正在聽…說完再按一次麥克風');
-      rec = Voice.listen((fin, interim) => { inp.value = before + fin + interim; fit(); }, failed => {
-        rec = null; mic.classList.remove('on');
-        hint.textContent = failed ? Lang.conv('沒聽清楚，可以再試一次，或按鍵盤上的麥克風') : '';
+      rec = Voice.listen((fin, interim) => { if (fin || interim) got = true; inp.value = before + fin + interim; fit(); }, failed => {
+        clearTimeout(timer); rec = null; mic.classList.remove('on');
+        hint.textContent = (failed || !got) ? Lang.conv(noVoice) : '';
       });
-      if (!rec) { mic.classList.remove('on'); toast('請按鍵盤上的麥克風說話'); }
+      if (!rec) { mic.classList.remove('on'); hint.textContent = Lang.conv(noVoice); return; }
+      timer = setTimeout(() => { if (rec && !got) rec.stop(); }, 6000);
     };
-    send.onclick = () => { const t = inp.value.trim(); if (!t || !canSend()) return; if (rec) rec.stop(); inp.value = ''; fit(); onSend(t); };
+    send.onclick = () => { const t = inp.value.trim(); if (!t || !canSend()) return; if (rec) rec.stop(); inp.value = ''; fit(); hint.textContent = ''; onSend(t); };
     return { inp, fit, focus() { inp.focus(); }, set(v) { inp.value = v; fit(); } };
   }
 
@@ -350,21 +357,26 @@
   function talk(kind, kid) {
     const isKid = kind === 'kid';
     const versions = C.versions[kind];
-    let selected = [versions[0].id];
+    const verKey = isKid ? 'ver_kid_' + kid.id : 'ver_adult';
+    const maxPick = isKid ? 1 : 2;
+    let selected = Store.get(verKey, [versions[0].id]).filter(id => versions.some(v => v.id === id)).slice(0, maxPick);
+    if (!selected.length) selected = [versions[0].id];
     const msgs = [];
-    let sillyCount = 0, record = null, busy = false, paused = false;
+    let sillyCount = 0, record = null, busy = false, paused = false, summarizedAt = 0;
     const base = isKid ? '/kid/' + kid.id : '/adult';
+    const vname = id => (versions.find(v => v.id === id) || {}).name || '';
 
     const greet = isKid ? '嗨，' + kid.name + '！今天有什麼想跟我說的嗎？開心的、不開心的都可以喔。' : '把你正在猶豫的事寫下來或說出來。不用整理得很完整，我們一步一步想。';
+    const topHtml = '<button class="ver-btn" id="verBtn"></button><button class="sum-pill" id="sumPill" hidden>📝 整理我的思考</button>' +
+      '<div class="ver-panel" id="verPanel" hidden><div class="small muted" style="margin-bottom:8px">' + (isKid ? '選一種回答方式' : '回答方式（最多選 2 種，改了只影響之後的回答）') + '</div>' +
+      '<div class="chips">' + versions.map(v => '<button class="chip" data-v="' + v.id + '">' + esc(v.name) + '</button>').join('') + '</div>' +
+      '<div class="small muted" id="vdesc" style="margin-top:8px"></div><button class="btn" id="verDone" style="margin-top:10px;padding:10px">好了</button></div>';
     render(top(isKid ? '說說我的煩惱' : '說出我的困境', base, isKid ? starPill(kid) : '') +
       '<div class="screen" style="padding-bottom:' + (isKid ? '150px' : '40px') + '">' +
       '<div class="buddy">' + (isKid ? buddy(44) : lamp(44)) + '<div class="msg-ai" style="flex:1"><div class="body"><p>' + esc(greet) + '</p></div><div class="foot">' + speakBtn(greet) + '</div></div></div>' +
-      '<div class="label" style="margin-top:8px">' + (isKid ? esc(NAME) + '用什麼方式回答你？' : '回答方式（可選 1 到 3 個）') + '</div>' +
-      '<div class="chips" id="vchips">' + versions.map(v => '<button class="chip' + (selected.includes(v.id) ? ' on' : '') + '" data-v="' + v.id + '">' + esc(v.name) + '</button>').join('') + '</div>' +
-      '<div class="small muted" id="vdesc" style="margin-top:6px">' + esc(versions[0].desc) + '</div>' +
       '<div class="chat" id="chat" style="margin-top:18px"></div>' +
       '<div id="tail"></div>' +
-      '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或按麥克風說話' : '例如：同事拜託我幫他隱瞞一個錯誤…') + '</div>' +
+      '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或按麥克風說話' : '例如：同事拜託我幫他隱瞞一個錯誤…', topHtml) + '</div>' +
       '</div>', isKid ? { kid } : null);
 
     const chat = document.getElementById('chat');
@@ -372,15 +384,36 @@
     const prefill = !isKid && sessionStorage.getItem('lz_prefill');
     if (prefill) { comp.set(prefill); sessionStorage.removeItem('lz_prefill'); }
 
-    document.getElementById('vchips').onclick = e => {
+    // 回答方式（收在輸入框上方）
+    const verBtn = document.getElementById('verBtn'), panel = document.getElementById('verPanel');
+    function paintVer() {
+      verBtn.textContent = Lang.conv('回答方式：' + selected.map(vname).join('＋') + ' ▾');
+      panel.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', selected.includes(c.dataset.v)));
+      document.getElementById('vdesc').textContent = Lang.conv(versions.filter(v => selected.includes(v.id)).map(v => v.name + '：' + v.desc).join('；'));
+    }
+    verBtn.onclick = () => { panel.hidden = !panel.hidden; };
+    document.getElementById('verDone').onclick = () => { panel.hidden = true; };
+    panel.onclick = e => {
       const b = e.target.closest('.chip'); if (!b) return;
       const id = b.dataset.v;
-      if (isKid) selected = [id];
+      if (maxPick === 1) selected = [id];
       else if (selected.includes(id)) { if (selected.length > 1) selected = selected.filter(x => x !== id); }
-      else { if (selected.length >= 3) { toast('最多選 3 個'); return; } selected.push(id); }
-      document.querySelectorAll('#vchips .chip').forEach(c => c.classList.toggle('on', selected.includes(c.dataset.v)));
-      document.getElementById('vdesc').textContent = versions.filter(v => selected.includes(v.id)).map(v => v.desc).join('；');
+      else { if (selected.length >= maxPick) selected.shift(); selected.push(id); }
+      Store.set(verKey, selected); paintVer();
     };
+    paintVer();
+
+    const sumPill = document.getElementById('sumPill');
+    sumPill.onclick = () => summarize();
+    const rounds = () => msgs.filter(m => m.role === 'user').length;
+    function paintTop() {
+      const last = msgs[msgs.length - 1];
+      const show = !paused && !busy && last && last.role === 'ai' && rounds() >= 3;
+      sumPill.hidden = !show;
+      const hot = show && rounds() >= 5 && summarizedAt < 5;
+      sumPill.classList.toggle('hot', hot);
+      sumPill.textContent = Lang.conv(hot ? '📝 聊了好幾輪，要不要整理一下？' : '📝 整理我的思考');
+    }
 
     function history(uptoIndex) {
       const h = [];
@@ -390,11 +423,9 @@
       });
       return h;
     }
-    const rounds = () => msgs.filter(m => m.role === 'user').length;
-    let summarizedAt = 0;
     async function summarize() {
       if (busy) return;
-      busy = true; comp.fit();
+      busy = true; comp.fit(); paintTop();
       const entry = { role: 'summary', loading: true }; msgs.push(entry); draw();
       try { entry.data = await AI.summary(kind, kid, history(msgs.length - 1)); }
       catch (e) { entry.error = AI.errorText(e); }
@@ -434,14 +465,14 @@
     }
     async function send(text) {
       if (!text || busy || paused) return;
-      busy = true; comp.fit(); Voice.stop();
+      busy = true; comp.fit(); Voice.stop(); panel.hidden = true;
       msgs.push({ role: 'user', text });
       msgs.push({ role: 'ai', v: {}, active: selected[0], order: selected.slice() });
       const idx = msgs.length - 1;
       const results = await Promise.all(selected.map(v => gen(idx, v)));
       busy = false;
       const main = results.find(r => r && !r.error);
-      if (main) { const ip = document.querySelector('#composer .inp'); if (ip) ip.setAttribute('placeholder', Lang.conv(isKid ? '還想說什麼嗎？寫下來或按麥克風' : '繼續說說你的想法…')); }
+      if (main) comp.inp.setAttribute('placeholder', Lang.conv(isKid ? '還想說什麼嗎？寫下來或按麥克風' : '繼續說說你的想法…'));
       if (main && isKid) {
         if (main.silly) sillyCount++; else { sillyCount = 0; giveStars(kid, 1); }
         record = saveKidRecord(kid, record, text, main, {
@@ -455,33 +486,30 @@
       chat.innerHTML = msgs.map((m, i) => {
         if (m.role === 'user') return '<div class="msg-user">' + esc(m.text) + '</div>';
         if (m.role === 'summary') return '<div class="ai-wrap">' + summaryHtml(m) + '</div>';
-        const tabs = (m.order.length > 1 || !isKid) ?
-          '<div class="tabs">' + m.order.map(v => '<button class="tab' + (v === m.active ? ' on' : '') + '" data-m="' + i + '" data-tab="' + v + '">' + esc(versions.find(x => x.id === v).name) + '</button>').join('') +
-          (!isKid && m.order.length < versions.length ? '<button class="tab add" data-m="' + i + '" data-add="1">＋ 其他角度</button>' : '') + '</div>' : '';
+        const canAdd = !isKid && m.order.length < versions.length;
+        const tabs = (m.order.length > 1 || canAdd) ?
+          '<div class="tabs">' + (m.order.length > 1 ? m.order.map(v => '<button class="tab' + (v === m.active ? ' on' : '') + '" data-m="' + i + '" data-tab="' + v + '">' + esc(vname(v)) + '</button>').join('') : '<span class="tab on">' + esc(vname(m.active)) + '</span>') +
+          (canAdd ? '<button class="tab add" data-m="' + i + '" data-add="1">換個方式</button>' : '') + '</div>' : '';
         const r = m.v[m.active] || {};
         let body;
         if (r.loading) body = '<div class="thinking-row">' + (isKid ? buddy(36, true) : lamp(36, true)) + '<span class="typing">' + (isKid ? esc(NAME) + '想一想' : '思考中') + '</span></div>';
-        else if (r.error) body = '<div class="body"><p>' + esc(r.error) + '</p></div>';
+        else if (r.error) body = '<div class="body"><p>' + esc(r.error) + '</p></div><div class="foot"><button class="btn ghost" style="width:auto;padding:8px 16px" data-retry="' + i + '" data-rv="' + m.active + '">重試</button></div>';
         else body = '<div class="body">' + md(r.reply || '') + '</div><div class="foot">' + speakBtn(r.reply || '') + '</div>';
         let extra = '';
         if (!r.loading && !r.error && i === msgs.length - 1) {
           if (isKid && r.level === 'urgent') extra += '<div class="notice urgent">這件事很重要，' + esc(kid.name) + '。要不要現在就去找爸爸媽媽說？<div style="margin-top:8px"><button class="btn danger" data-go="/kid/' + kid.id + '/help">找爸爸媽媽幫忙</button></div></div>';
           if (!isKid && r.level === 'urgent') extra += '<div class="notice urgent"><b>你的安全最重要。</b>請聯絡身邊信任的人，或撥打以下電話：' + hotlinesHtml() + '</div>';
-          if (!paused && r.options && r.options.length) extra += '<div class="quick">' + r.options.map(o => '<button data-quick="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>';
+          let opts = (r.options || []).slice();
+          if (!isKid && !opts.some(o => /對方|对方/.test(o))) opts.push('從對方的角度看看');
+          if (!paused && opts.length) extra += '<div class="quick">' + opts.map(o => '<button data-quick="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>';
         }
-        return '<div class="ai-wrap">' + '<div class="ai-row">' + (isKid ? buddy(30) : lamp(30)) + '<div class="msg-ai">' + tabs + body + '</div></div>' + extra + '</div>';
+        return '<div class="ai-wrap"><div class="ai-row">' + (isKid ? buddy(30) : lamp(30)) + '<div class="msg-ai">' + tabs + body + '</div></div>' + extra + '</div>';
       }).join('');
 
       let tail = '';
-      const n = rounds(), lastIsAi = msgs.length && msgs[msgs.length - 1].role === 'ai';
-      if (!paused && !busy && lastIsAi && n >= 3) {
-        if (n >= 5 && summarizedAt < 5) tail += '<div class="notice info" style="margin-top:14px">' + (isKid ? '我們聊了好多喔！要不要一起看看今天想到了什麼？' : '已經聊了好幾輪了，要不要整理一下目前的想法？') + '<div style="margin-top:8px"><button class="btn accent" id="doSum">整理我的思考</button></div></div>';
-        else tail += '<div style="margin-top:14px"><button class="btn ghost" id="doSum">整理我的思考</button></div>';
-      }
       if (paused) tail = '<div class="result center" style="margin-top:16px">' + esc(NAME) + '有點累了，我們休息一下，下次再一起想吧！<div style="margin-top:12px"><button class="btn" data-go="/kid/' + kid.id + '/scenes">去玩情境卡</button><button class="btn ghost" data-go="/kid/' + kid.id + '">回到首頁</button></div></div>';
-      else if (!isKid && msgs.length && !busy) tail += '<div style="margin-top:10px"><button class="btn ghost" id="saveAdult">' + (record ? '已存到我的紀錄 ✓' : '存到我的紀錄（只有家長密碼能看）') + '</button></div>';
+      else if (!isKid && msgs.length && !busy) tail = '<div style="margin-top:14px"><button class="btn ghost small-btn" id="saveAdult">' + (record ? '已存到我的紀錄 ✓' : '存到我的紀錄（只有家長密碼能看）') + '</button></div>';
       document.getElementById('tail').innerHTML = tail;
-      const ds = document.getElementById('doSum'); if (ds) ds.onclick = summarize;
       const sa = document.getElementById('saveAdult');
       if (sa) sa.onclick = () => {
         if (!Secure.hasPassword()) { toast('請先到家長專區設定密碼'); return; }
@@ -494,7 +522,9 @@
       };
       chat.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { msgs[+b.dataset.m].active = b.dataset.tab; draw(); });
       chat.querySelectorAll('[data-add]').forEach(b => b.onclick = () => pickExtra(+b.dataset.m));
+      chat.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => gen(+b.dataset.retry, b.dataset.rv));
       chat.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => (/整理/.test(b.dataset.quick) && rounds() >= 2) ? summarize() : send(b.dataset.quick));
+      paintTop();
       if (msgs.length) document.getElementById('composer').scrollIntoView({ block: 'end', behavior: 'smooth' });
     }
     function pickExtra(i) {

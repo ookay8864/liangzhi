@@ -31,17 +31,22 @@ window.AI = (function () {
   function kidSystem(kid, version, sillyCount) {
     return '你是「' + NAME + '」，一個圓圓的小羅盤，溫柔、可愛、值得信任，陪 6 到 9 歲的小朋友（他叫 ' + kid.name + '）想事情。\n' +
       core('kid') + '\n\n' + KID_STYLE + '回答不超過 120 字。\n這次的說話方式：' + version.style + '\n\n' + KID_SAFETY + sillyRule(sillyCount) +
-      '只輸出 JSON，格式：{"level":"normal|concern|urgent","silly":true或false,"reply":"給孩子的話","options":["孩子可以點的回答1","回答2"],"summary":"一句話告訴家長孩子說了什麼（客觀描述）","parent_tip":"給家長的建議：怎麼自然地開口關心，不要讓孩子知道家長看過紀錄，30 到 60 字"}\n' +
+      '只輸出 JSON 物件，reply 一定要有內容。格式：{"level":"normal|concern|urgent","silly":true或false,"reply":"給孩子的話","options":["孩子可以點的回答1","回答2"],"summary":"一句話告訴家長孩子說了什麼（客觀描述）","parent_tip":"給家長的建議：怎麼自然地開口關心，不要讓孩子知道家長看過紀錄，30 到 60 字"}\n' +
       'options 給 2 到 3 個孩子可能想說的短句（每個 12 字以內），讓他不用打字也能繼續聊。summary 和 parent_tip 用繁體中文。';
   }
 
   function adultSystem(version) {
-    return '你是一位有智慧、溫和、正直的對話夥伴，幫助大人想清楚道德上的兩難。\n' + core('adult') + '\n\n' +
-      '這次的說話方式：' + version.style + '\n' +
-      '可以提出 1 個好問題幫助對方繼續想。如果資訊不足，可以先問。可以用 **粗體** 和「- 」條列。\n' +
-      '安全規則：如果對方提到想傷害自己或別人、正在遭受暴力、或有人有立即危險，level 設為 "urgent"，回應要先關心他的安全，請他立刻聯絡身邊信任的人或撥打求助電話（緊急 110，心理援助 12356），不要繼續一般分析。涉及法律、醫療、財務的重大問題，提醒尋求專業人士。\n' +
-      '只輸出 JSON，格式：{"level":"normal|urgent","reply":"你的回答","options":["使用者可能想接著說的話1","2","3"]}\n' +
-      'options 給 2 到 3 個使用者可能想接著說或問的短句（每個 15 字以內，用第一人稱），幫助他繼續深入想。';
+    return '你是使用者一位睿智、真誠、說話直接的老朋友，幫他想清楚生活中的兩難。\n' + core('adult') + '\n\n' +
+      '說話方式（所有回答都要做到）：\n' +
+      '- 像朋友聊天一樣用口語，不要像客服或老師。不說「我理解你的感受」「這是一個很好的問題」這類套話，不重複對方說過的話。\n' +
+      '- 一針見血：找出他話裡真正卡住的核心（常常不是表面的問題），直接點出來。\n' +
+      '- 每次只問一個問題，而且是能幫他看清自己的關鍵問題。\n' +
+      '- 要能解決問題：給具體、現在就能做的建議，不給空泛的大道理。\n' +
+      '- 自然地幫他換位思考：想想對方的感受和立場。\n' +
+      '這次的回答長度和風格：' + version.style + '\n\n' +
+      '安全規則：如果對方提到想傷害自己或別人、正在遭受暴力、或有人有立即危險，level 設為 "urgent"，回應要先關心他的安全，請他立刻聯絡身邊信任的人或撥打求助電話（緊急 110，心理援助 12356），不要繼續一般分析。涉及法律、醫療、財務的重大問題，提醒尋求專業人士。\n\n' +
+      '只輸出 JSON 物件，不要有其他文字。格式範例：{"level":"normal","reply":"你的回答寫在這裡","options":["我比較在意他的感受","如果他不改呢？"]}\n' +
+      'reply 一定要有內容。options 給 2 個使用者可能想接著說或問的短句（每個 15 字以內，用第一人稱）。';
   }
 
   function summarySystem(kind, kid) {
@@ -68,25 +73,53 @@ window.AI = (function () {
       '如果內容涉及有人有立即危險，level 設為 "urgent"。\n只輸出 JSON：{"level":"normal|urgent","praise":"","result":"","feelings":[{"who":"","mood":"","text":""}],"think":""}';
   }
 
-  async function call(system, history) {
+  // 從 AI 回應裡找出文字：先找 reply，再找其他字串欄位
+  function pickText(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+    if (typeof obj.reply === 'string' && obj.reply.trim()) return obj.reply;
+    let best = '';
+    Object.keys(obj).forEach(k => {
+      const v = obj[k];
+      if (typeof v === 'string' && !/^(level|silly|summary|parent_tip)$/.test(k) && v.length > best.length) best = v;
+    });
+    return best;
+  }
+  async function request(system, history, json) {
     const s = Store.settings();
     if (!s.apiKey) throw new Error('NO_KEY');
+    const body = {
+      model: CONFIG.ai.model, temperature: CONFIG.ai.temperature, max_tokens: 2000,
+      messages: [{ role: 'system', content: system }].concat(history.slice(-12))
+    };
+    if (json) body.response_format = { type: 'json_object' };
     const res = await fetch(CONFIG.ai.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.apiKey },
-      body: JSON.stringify({
-        model: CONFIG.ai.model, temperature: CONFIG.ai.temperature,
-        response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: system }].concat(history.slice(-12))
-      })
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.apiKey }, body: JSON.stringify(body)
     });
     if (!res.ok) throw new Error('HTTP_' + res.status);
     const data = await res.json();
-    const text = data.choices[0].message.content;
+    const text = ((data.choices || [])[0] || {}).message ? data.choices[0].message.content || '' : '';
+    if (!text.trim()) return null;
     try { return JSON.parse(text); } catch (e) {
-      const m = text.match(/\{[\s\S]*\}/); if (m) { try { return JSON.parse(m[0]); } catch (e2) {} }
-      return { level: 'normal', reply: text };
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) { try { return JSON.parse(m[0]); } catch (e2) {} }
+      return { level: 'normal', reply: text.trim() };
     }
+  }
+  // needReply：需要有 reply 文字的回答（對話），空的就自動再試一次
+  async function call(system, history, needReply) {
+    let r = await request(system, history, true);
+    if (needReply) {
+      if (r && !r.reply) r.reply = pickText(r);
+      if (!r || !r.reply) {
+        r = await request(system, history, false);
+        if (r && !r.reply) r.reply = pickText(r);
+      }
+      if (!r || !r.reply) throw new Error('EMPTY');
+    } else if (!r) {
+      r = await request(system, history, true);
+      if (!r) throw new Error('EMPTY');
+    }
+    return r;
   }
 
   function localUrgent(text) { return CONFIG.urgentWords.some(w => text.indexOf(w) >= 0 || text.indexOf(Lang.conv(w)) >= 0); }
@@ -95,7 +128,7 @@ window.AI = (function () {
     localUrgent,
     async kid(kid, versionId, history, sillyCount) {
       const v = CONFIG.versions.kid.find(x => x.id === versionId) || CONFIG.versions.kid[0];
-      const r = await call(kidSystem(kid, v, sillyCount), history);
+      const r = await call(kidSystem(kid, v, sillyCount), history, true);
       const lastUser = [...history].reverse().find(m => m.role === 'user');
       if (lastUser && localUrgent(lastUser.content)) { r.level = 'urgent'; r.silly = false; }
       r.options = Array.isArray(r.options) ? r.options.slice(0, 3) : [];
@@ -103,7 +136,7 @@ window.AI = (function () {
     },
     async adult(versionId, history) {
       const v = CONFIG.versions.adult.find(x => x.id === versionId) || CONFIG.versions.adult[0];
-      const r = await call(adultSystem(v), history);
+      const r = await call(adultSystem(v), history, true);
       r.options = Array.isArray(r.options) ? r.options.slice(0, 3) : [];
       return r;
     },
@@ -127,7 +160,8 @@ window.AI = (function () {
       if (e.message === 'NO_KEY') return '還沒設定好 AI，請爸爸媽媽到「家長專區 → 設定」填入 DeepSeek 金鑰。';
       if (e.message === 'HTTP_401') return 'AI 金鑰不正確，請到家長專區檢查設定。';
       if (e.message === 'HTTP_402') return 'AI 帳戶餘額不足，請到 DeepSeek 網站儲值。';
-      return '連線有點問題，請稍後再試一次。';
+      if (e.message === 'EMPTY') return '這次沒有回應成功，請按「重試」。';
+      return '連線有點問題，請按「重試」再試一次。';
     }
   };
 })();
