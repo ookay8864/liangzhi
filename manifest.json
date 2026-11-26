@@ -1,6 +1,6 @@
 {
-  "name": "良知羅盤",
-  "short_name": "良知羅盤",
+  "name": "良知旋轉盤",
+  "short_name": "良知旋轉盤",
   "description": "遇到兩難的時候，陪你想清楚",
   "start_url": "./",
   "display": "standalone",
