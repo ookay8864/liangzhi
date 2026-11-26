@@ -262,3 +262,14 @@ body.pinyin .daily rt { color: rgba(255,255,255,.8); }
 .tip-x { margin-left: auto; font-size: 12px; font-weight: 600; color: #633806; white-space: nowrap; }
 .hint:empty { display: none; }
 .small-btn { padding: 11px; font-size: 14px; }
+
+/* ===== v0.5 ===== */
+.modal-box { text-align: left; font-weight: 400; }
+.modal-box .btn { margin-top: 10px; }
+.modal-t { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.modal-x { color: var(--muted); font-size: 14px; margin-bottom: 8px; line-height: 1.6; }
+.end-row { text-align: center; margin-top: 6px; }
+.end-row button { font-size: 13px; color: var(--muted); padding: 6px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.rec-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
+.rec-row .rec { margin: 0; flex: 1; min-width: 0; }
+.rec-del { width: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font-size: 16px; }

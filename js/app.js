@@ -57,7 +57,18 @@
       '<circle cx="60" cy="52" r="15" fill="#EF9F27"/><rect x="51" y="72" width="18" height="7" rx="3.5" fill="#0F6E56"/>' +
       '<rect x="53" y="82" width="14" height="6" rx="3" fill="#0F6E56"/></svg>';
   }
+  // 跳出視窗
+  function modal(title, text, buttons) {
+    const d = document.createElement('div'); d.className = 'celebrate';
+    d.innerHTML = '<div class="cel-box modal-box"><div class="modal-t">' + esc(title) + '</div><div class="modal-x">' + esc(text) + '</div>' +
+      buttons.map((b, i) => '<button class="btn ' + (b.cls || 'ghost') + '" data-mi="' + i + '">' + esc(b.label) + '</button>').join('') + '</div>';
+    document.body.appendChild(d); Lang.localize(d);
+    d.onclick = e => { const b = e.target.closest('[data-mi]'); if (b) { d.remove(); const f = buttons[+b.dataset.mi].fn; if (f) f(); } else if (e.target === d) d.remove(); };
+  }
+  // 離開保護：對話還沒保留時，離開前先問
+  let guard = null;
   function render(html, opts) {
+    guard = null;
     Voice.stop();
     opts = opts || {};
     const kid = opts.kid || null;
@@ -111,6 +122,8 @@
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-back],[data-go],[data-speak]');
     if (!b) return;
+    const dest = b.dataset.back || b.dataset.go;
+    if (dest && guard && guard.needs()) { e.preventDefault(); guard.show(dest); return; }
     if (b.dataset.back) go(b.dataset.back);
     else if (b.dataset.go) go(b.dataset.go);
     else if (b.dataset.speak) { e.stopPropagation(); Voice.speak(b.dataset.speak, b); }
@@ -354,15 +367,24 @@
   }
 
   // ---------- 對話（小孩和大人共用） ----------
-  function talk(kind, kid) {
+  function talk(kind, kid, resumeId) {
     const isKid = kind === 'kid';
     const versions = C.versions[kind];
     const verKey = isKid ? 'ver_kid_' + kid.id : 'ver_adult';
     const maxPick = isKid ? 1 : 2;
     let selected = Store.get(verKey, [versions[0].id]).filter(id => versions.some(v => v.id === id)).slice(0, maxPick);
     if (!selected.length) selected = [versions[0].id];
-    const msgs = [];
-    let sillyCount = 0, record = null, busy = false, paused = false, summarizedAt = 0;
+    let msgs = [];
+    let sillyCount = 0, record = null, busy = false, paused = false, summarizedAt = 0, saved = false, closed = false;
+    if (resumeId) {
+      record = Store.records().find(r => r.id === resumeId) || null;
+      if (record) {
+        saved = true;
+        msgs = record.raw ? JSON.parse(JSON.stringify(record.raw)) :
+          (record.messages || []).map(m => m.role === 'user' ? { role: 'user', text: m.text } : { role: 'ai', v: { [versions[0].id]: { reply: m.text } }, active: versions[0].id, order: [versions[0].id] });
+        msgs.forEach(m => { if (m.role === 'ai') Object.keys(m.v).forEach(k => { if (m.v[k] && m.v[k].loading) m.v[k] = { error: '這則沒有完成，請按「重試」。' }; }); });
+      }
+    }
     const base = isKid ? '/kid/' + kid.id : '/adult';
     const vname = id => (versions.find(v => v.id === id) || {}).name || '';
 
@@ -374,12 +396,40 @@
     render(top(isKid ? '說說我的煩惱' : '說出我的困境', base, isKid ? starPill(kid) : '') +
       '<div class="screen" style="padding-bottom:' + (isKid ? '150px' : '40px') + '">' +
       '<div class="buddy">' + (isKid ? buddy(44) : lamp(44)) + '<div class="msg-ai" style="flex:1"><div class="body"><p>' + esc(greet) + '</p></div><div class="foot">' + speakBtn(greet) + '</div></div></div>' +
+      (isKid ? '' : '<div class="small muted center" id="keepNote" style="margin-top:8px">' + (saved ? '這是保留的對話，會自動更新。' : '🔒 沒有保留的對話，離開後就會刪除。') + '</div>') +
       '<div class="chat" id="chat" style="margin-top:18px"></div>' +
       '<div id="tail"></div>' +
-      '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或按麥克風說話' : '例如：同事拜託我幫他隱瞞一個錯誤…', topHtml) + '</div>' +
+      '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或按麥克風說話' : '例如：同事拜託我幫他隱瞞一個錯誤…', topHtml) +
+      (isKid ? '' : '<div class="end-row"><button id="endBtn">結束對話</button></div>') + '</div>' +
       '</div>', isKid ? { kid } : null);
 
     const chat = document.getElementById('chat');
+    function rawSnapshot() { return JSON.parse(JSON.stringify(msgs.filter(m => !(m.role === 'summary' && m.loading)))); }
+    function keep() {
+      if (!record) record = { id: Store.uid(), type: 'adult-talk', time: Date.now(), level: 'normal' };
+      record.raw = rawSnapshot();
+      record.messages = msgs.filter(m => m.role !== 'summary').map(m => m.role === 'user' ? { role: 'user', text: m.text } : { role: 'ai', text: (m.v[m.active] || {}).reply || '' });
+      const lastSum = msgs.filter(m => m.role === 'summary' && m.data).pop();
+      if (lastSum) record.summaryCard = lastSum.data;
+      const first = msgs.find(m => m.role === 'user');
+      record.summary = first ? first.text.slice(0, 40) : '';
+      record.updated = Date.now();
+      Store.saveRecord(record); saved = true;
+      const kn = document.getElementById('keepNote'); if (kn) kn.textContent = Lang.conv('這是保留的對話，會自動更新。');
+    }
+    function endFlow(dest) {
+      dest = dest || '/adult';
+      if (saved) { keep(); guard = null; go(dest); return; }
+      modal('要結束這次對話嗎？', '為了保護你的隱私，不保留的對話會直接刪除。保留的對話可以在「我的對話」裡找到（需要家長密碼），也能接著聊。', [
+        { label: '保留對話', cls: 'accent', fn: () => { keep(); toast('已保留'); guard = null; go(dest); } },
+        { label: '不保留，直接結束', cls: 'danger', fn: () => { guard = null; go(dest); } },
+        { label: '繼續聊', cls: 'ghost' }
+      ]);
+    }
+    if (!isKid) {
+      guard = { hash: location.hash, needs: () => !saved && msgs.some(m => m.role === 'user'), show: endFlow };
+      document.getElementById('endBtn').onclick = () => msgs.some(m => m.role === 'user') ? endFlow('/adult') : go('/adult');
+    }
     const comp = bindComposer(document.getElementById('composer'), t => send(t), () => !busy && !paused);
     const prefill = !isKid && sessionStorage.getItem('lz_prefill');
     if (prefill) { comp.set(prefill); sessionStorage.removeItem('lz_prefill'); }
@@ -430,7 +480,8 @@
       try { entry.data = await AI.summary(kind, kid, history(msgs.length - 1)); }
       catch (e) { entry.error = AI.errorText(e); }
       entry.loading = false; busy = false; summarizedAt = rounds();
-      if (entry.data && record) { record.summaryCard = entry.data; Store.saveRecord(record); }
+      if (entry.data && record && isKid) { record.summaryCard = entry.data; Store.saveRecord(record); }
+      if (!isKid && saved) keep();
       comp.fit(); draw();
     }
     function summaryHtml(e) {
@@ -473,6 +524,9 @@
       busy = false;
       const main = results.find(r => r && !r.error);
       if (main) comp.inp.setAttribute('placeholder', Lang.conv(isKid ? '還想說什麼嗎？寫下來或按麥克風' : '繼續說說你的想法…'));
+      if (main && !isKid && saved) keep();
+      closed = !!(main && main.closing);
+      if (main && isKid && main.closing && !main.silly) giveStars(kid, 1);
       if (main && isKid) {
         if (main.silly) sillyCount++; else { sillyCount = 0; giveStars(kid, 1); }
         record = saveKidRecord(kid, record, text, main, {
@@ -499,8 +553,11 @@
         if (!r.loading && !r.error && i === msgs.length - 1) {
           if (isKid && r.level === 'urgent') extra += '<div class="notice urgent">這件事很重要，' + esc(kid.name) + '。要不要現在就去找爸爸媽媽說？<div style="margin-top:8px"><button class="btn danger" data-go="/kid/' + kid.id + '/help">找爸爸媽媽幫忙</button></div></div>';
           if (!isKid && r.level === 'urgent') extra += '<div class="notice urgent"><b>你的安全最重要。</b>請聯絡身邊信任的人，或撥打以下電話：' + hotlinesHtml() + '</div>';
-          let opts = (r.options || []).slice();
-          if (!isKid && !opts.some(o => /對方|对方/.test(o))) opts.push('從對方的角度看看');
+          if (r.closing && !isKid) extra += '<div class="notice info">要結束這次對話了嗎？<div class="two-btn" style="margin-top:10px"><button class="btn ghost" data-act="cont">繼續聊</button><button class="btn accent" data-act="end">結束對話</button></div></div>';
+          if (r.closing && isKid) extra += '<div class="result center">今天你很勇敢說出來！⭐<div style="margin-top:12px"><button class="btn" data-go="/kid/' + kid.id + '">回到首頁</button></div></div>';
+          if (r.looping && !r.closing) extra += '<div class="notice privacy">好像在同一個地方打轉了。要不要先整理一下，或休息一下？<div class="two-btn" style="margin-top:10px"><button class="btn ghost" data-act="rest">先休息一下</button><button class="btn accent" data-act="sum">整理我的思考</button></div></div>';
+          let opts = r.closing ? [] : (r.options || []).slice();
+          if (!isKid && !r.closing && !opts.some(o => /對方|对方/.test(o))) opts.push('從對方的角度看看');
           if (!paused && opts.length) extra += '<div class="quick">' + opts.map(o => '<button data-quick="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>';
         }
         return '<div class="ai-wrap"><div class="ai-row">' + (isKid ? buddy(30) : lamp(30)) + '<div class="msg-ai">' + tabs + body + '</div></div>' + extra + '</div>';
@@ -508,25 +565,22 @@
 
       let tail = '';
       if (paused) tail = '<div class="result center" style="margin-top:16px">' + esc(NAME) + '有點累了，我們休息一下，下次再一起想吧！<div style="margin-top:12px"><button class="btn" data-go="/kid/' + kid.id + '/scenes">去玩情境卡</button><button class="btn ghost" data-go="/kid/' + kid.id + '">回到首頁</button></div></div>';
-      else if (!isKid && msgs.length && !busy) tail = '<div style="margin-top:14px"><button class="btn ghost small-btn" id="saveAdult">' + (record ? '已存到我的紀錄 ✓' : '存到我的紀錄（只有家長密碼能看）') + '</button></div>';
       document.getElementById('tail').innerHTML = tail;
-      const sa = document.getElementById('saveAdult');
-      if (sa) sa.onclick = () => {
-        if (!Secure.hasPassword()) { toast('請先到家長專區設定密碼'); return; }
-        if (!record) record = { id: Store.uid(), type: 'adult-talk', time: Date.now(), level: 'normal' };
-        record.messages = msgs.filter(m => m.role !== 'summary').map(m => m.role === 'user' ? { role: 'user', text: m.text } : { role: 'ai', text: (m.v[m.active] || {}).reply || '' });
-        const lastSum = msgs.filter(m => m.role === 'summary' && m.data).pop();
-        if (lastSum) record.summaryCard = lastSum.data;
-        record.summary = msgs[0].text.slice(0, 40);
-        Store.saveRecord(record); draw(); toast('已儲存');
-      };
+      chat.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+        const a = b.dataset.act;
+        if (a === 'end' || a === 'rest') endFlow('/adult');
+        else if (a === 'sum') summarize();
+        else if (a === 'cont') { b.closest('.notice').remove(); comp.focus(); }
+      });
       chat.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { msgs[+b.dataset.m].active = b.dataset.tab; draw(); });
       chat.querySelectorAll('[data-add]').forEach(b => b.onclick = () => pickExtra(+b.dataset.m));
       chat.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => gen(+b.dataset.retry, b.dataset.rv));
       chat.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => (/整理/.test(b.dataset.quick) && rounds() >= 2) ? summarize() : send(b.dataset.quick));
       paintTop();
-      if (msgs.length) document.getElementById('composer').scrollIntoView({ block: 'end', behavior: 'smooth' });
+      const lastEl = chat.lastElementChild;
+      if (lastEl) { const y = lastEl.getBoundingClientRect().top + window.scrollY - 70; window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); }
     }
+    if (msgs.length) { comp.inp.setAttribute('placeholder', Lang.conv('繼續說說你的想法…')); draw(); }
     function pickExtra(i) {
       const m = msgs[i];
       const left = versions.filter(v => !m.order.includes(v.id));
@@ -574,9 +628,31 @@
       '<div style="height:12px"></div>' +
       '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">👨‍👩‍👦</span><span><div class="t">孩子的紀錄' + (urgent ? ' <span class="badge urgent">' + urgent + ' 則需要關心</span>' : '') + '</div><div class="d">查看孩子的煩惱和情境練習（需要密碼）</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult/talk"><span class="ic">✍️</span><span><div class="t">說出我的困境</div><div class="d">寫下或說出你正在猶豫的事</div></span><span class="arrow">›</span></button>' +
+      '<button class="choice" data-go="/adult/history"><span class="ic" style="background:#f1efe8">🗂️</span><span><div class="t">我的對話</div><div class="d">回去看保留的對話，也能接著聊（需要密碼）</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult/scenes"><span class="ic" style="background:#faeeda">🎲</span><span><div class="t">情境練習</div><div class="d">從常見的兩難情境開始</div></span><span class="arrow">›</span></button>' +
-      '<p class="small muted center" style="margin-top:20px">對話內容只存在這支手機上，除非你選擇儲存。</p>' +
+      '<p class="small muted center" style="margin-top:20px">對話只存在這支手機上，結束時由你決定要不要保留。</p>' +
       '<div class="foot-note">' + (adultMode ? '<a href="#/kid" style="color:inherit">小孩版</a> · ' : '') + '<a href="#/about" style="color:inherit">我們的原則</a></div></div>');
+  }
+
+  function adultHistory() {
+    const list = Store.records().filter(r => r.type === 'adult-talk').sort((a, b) => (b.updated || b.time) - (a.updated || a.time));
+    render(top('我的對話', '/adult') +
+      '<div class="screen"><p class="small muted">點一下就能回到對話，接著聊。</p>' +
+      (list.length ? list.map(r => '<div class="rec-row"><button class="rec" data-go="/adult/talk/' + r.id + '"><div class="row"><span>' + timeStr(r.updated || r.time) + '</span><span class="small">' + ((r.messages || []).filter(m => m.role === 'user').length) + ' 輪</span></div><div class="sum">' + esc(r.summary || '（沒有內容）') + '</div></button><button class="rec-del" data-del="' + r.id + '" aria-label="刪除">🗑</button></div>').join('')
+        : '<p class="muted center" style="margin-top:40px">還沒有保留的對話</p>') +
+      '<div style="margin-top:20px"><button class="btn ghost" id="lock">鎖定並離開</button></div></div>');
+    app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      modal('刪除這段對話？', '刪除後就找不回來了。', [
+        { label: '刪除', cls: 'danger', fn: () => { Store.deleteRecord(b.dataset.del); adultHistory(); } },
+        { label: '取消', cls: 'ghost' }]);
+    });
+    document.getElementById('lock').onclick = () => { sessionStorage.removeItem('lz_unlock'); go('/adult'); };
+  }
+  function gated(fn) {
+    if (!Secure.available()) return render(top('', '/') + '<div class="screen"><div class="notice urgent">請用 Safari 打開這個網站（需要 https 網址）。</div></div>');
+    if (!Secure.hasPassword()) return parentSetup();
+    if (!unlocked()) return parentGate(fn);
+    sessionStorage.setItem('lz_unlock', Date.now()); fn();
   }
 
   // ---------- 家長專區 ----------
@@ -604,7 +680,8 @@
       if (a !== b) return err.textContent = Lang.conv('兩次輸入不一樣');
       await Secure.setPassword(a);
       sessionStorage.setItem('lz_unlock', Date.now());
-      toast('密碼設定好了'); go('/parent/settings');
+      toast('密碼設定好了');
+      if (/^#\/adult\/(history|talk\/)/.test(location.hash)) route(); else go('/parent/settings');
     };
   }
   function parentGate(next) {
@@ -633,7 +710,7 @@
       '<button class="' + (tab === 'me' ? 'on' : '') + '" data-go="/parent/kid/me">我的紀錄</button></div>' +
       (tab !== 'me' ? '<div class="small muted" style="margin:-6px 0 10px">⭐ ' + Store.stars(tab) + ' 顆星 · 📒 ' + Store.stickers(tab).length + ' 張貼紙 · 玩過 ' + Store.played(tab).length + ' 張情境卡</div>' : '') +
       (list.length ? list.map(r =>
-        '<button class="rec" data-go="/parent/rec/' + r.id + '"><div class="row"><span>' + timeStr(r.time) + '</span><span class="badge ' + (r.level || 'normal') + '">' +
+        '<button class="rec" data-go="' + (r.type === 'adult-talk' ? '/adult/talk/' : '/parent/rec/') + r.id + '"><div class="row"><span>' + timeStr(r.time) + '</span><span class="badge ' + (r.level || 'normal') + '">' +
         (r.type === 'kid-scene' ? '情境練習' : r.type === 'kid-help' ? '找你幫忙' : levelName[r.level] || '紀錄') + '</span></div>' +
         '<div class="sum">' + esc(r.summary || (r.kidText || '').slice(0, 40) || '（沒有內容）') + '</div></button>').join('')
         : '<p class="muted center" style="margin-top:40px">還沒有紀錄</p>') +
@@ -774,6 +851,11 @@
 
   // ---------- 路由 ----------
   function route() {
+    if (guard && location.hash !== guard.hash && guard.needs()) {
+      const dest = location.hash.replace(/^#/, '') || '/';
+      history.replaceState(null, '', guard.hash);
+      guard.show(dest); return;
+    }
     const raw = location.hash.replace(/^#/, '') || '/';
     const [path, query] = raw.split('?');
     const p = path.split('/').filter(Boolean);
@@ -793,7 +875,9 @@
     if (p[0] === 'adult') {
       if (p[1] === 'scenes') return sceneList('adult');
       if (p[1] === 'scene') return scenePlay('adult', null, p[2]);
+      if (p[1] === 'talk' && p[2]) return gated(() => talk('adult', null, p[2]));
       if (p[1] === 'talk') return talk('adult');
+      if (p[1] === 'history') return gated(adultHistory);
       return adultHome();
     }
     if (p[0] === 'parent') {
