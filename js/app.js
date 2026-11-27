@@ -548,7 +548,9 @@
         let body;
         if (r.loading) body = '<div class="thinking-row">' + (isKid ? buddy(36, true) : lamp(36, true)) + '<span class="typing">' + (isKid ? esc(NAME) + '想一想' : '思考中') + '</span></div>';
         else if (r.error) body = '<div class="body"><p>' + esc(r.error) + '</p></div><div class="foot"><button class="btn ghost" style="width:auto;padding:8px 16px" data-retry="' + i + '" data-rv="' + m.active + '">重試</button></div>';
-        else body = '<div class="body">' + md(r.reply || '') + '</div><div class="foot">' + speakBtn(r.reply || '') + '</div>';
+        else body = '<div class="body">' + md(r.reply || '') + '</div><div class="foot">' +
+          (isKid ? '' : '<span class="fb"><button class="fb-b' + (r.fb === 'up' ? ' on' : '') + '" data-fb="' + i + '" data-fv="up" aria-label="喜歡">👍</button><button class="fb-b' + (r.fb === 'down' ? ' on' : '') + '" data-fb="' + i + '" data-fv="down" aria-label="不喜歡">👎</button></span>') +
+          speakBtn(r.reply || '') + '</div>';
         let extra = '';
         if (!r.loading && !r.error && i === msgs.length - 1) {
           if (isKid && r.level === 'urgent') extra += '<div class="notice urgent">這件事很重要，' + esc(kid.name) + '。要不要現在就去找爸爸媽媽說？<div style="margin-top:8px"><button class="btn danger" data-go="/kid/' + kid.id + '/help">找爸爸媽媽幫忙</button></div></div>';
@@ -571,6 +573,18 @@
         if (a === 'end' || a === 'rest') endFlow('/adult');
         else if (a === 'sum') summarize();
         else if (a === 'cont') { b.closest('.notice').remove(); comp.focus(); }
+      });
+      chat.querySelectorAll('[data-fb]').forEach(b => b.onclick = () => {
+        const i = +b.dataset.fb, m = msgs[i], vid = m.active, r = m.v[vid];
+        const q = (msgs.slice(0, i).reverse().find(x => x.role === 'user') || {}).text || '';
+        const saveFb = reason => {
+          r.fb = b.dataset.fv;
+          const all = Store.get('feedback', []);
+          all.unshift({ time: Date.now(), vote: r.fb, reason: reason || '', version: vname(vid), q, a: r.reply });
+          Store.set('feedback', all.slice(0, 100)); draw(); toast('謝謝你的回饋');
+        };
+        if (b.dataset.fv === 'up') return saveFb('');
+        modal('哪裡不喜歡？', '你的回饋會存在這支手機的家長專區，之後可以拿來調整回答。', ['太表面', '像心靈雞湯', '太長', '沒抓到重點', '語氣不對'].map(x => ({ label: x, cls: 'ghost', fn: () => saveFb(x) })).concat([{ label: '取消', cls: 'ghost' }]));
       });
       chat.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { msgs[+b.dataset.m].active = b.dataset.tab; draw(); });
       chat.querySelectorAll('[data-add]').forEach(b => b.onclick = () => pickExtra(+b.dataset.m));
@@ -655,6 +669,24 @@
     sessionStorage.setItem('lz_unlock', Date.now()); fn();
   }
 
+  function feedbackPage() {
+    const list = Store.get('feedback', []);
+    const text = list.map((f, i) => '【' + (i + 1) + '】' + (f.vote === 'up' ? '👍' : '👎 ' + f.reason) + '（' + f.version + '）\n問：' + f.q + '\n答：' + f.a).join('\n\n');
+    render(top('回答回饋', '/parent/settings') +
+      '<div class="screen"><p class="small muted">這裡是你按過 👍 👎 的回答。想調整 AI 的說話方式時，按「複製全部」，貼給 Claude 就好。</p>' +
+      (list.length ? '<button class="btn" id="cp">複製全部（' + list.length + ' 則）</button><button class="btn danger" id="clr">清除回饋</button>' +
+        list.map(f => '<div class="rec"><div class="row"><span>' + timeStr(f.time) + ' · ' + esc(f.version) + '</span><span class="badge ' + (f.vote === 'up' ? 'normal' : 'urgent') + '">' + (f.vote === 'up' ? '👍' : '👎 ' + esc(f.reason)) + '</span></div><div class="sum small"><b>問：</b>' + esc(f.q) + '</div><div class="sum small muted"><b>答：</b>' + esc(f.a) + '</div></div>').join('')
+        : '<p class="muted center" style="margin-top:40px">還沒有回饋</p>') +
+      '<textarea id="cpText" class="no-py" style="position:absolute;left:-9999px">' + esc(text) + '</textarea></div>');
+    const cp = document.getElementById('cp');
+    if (cp) cp.onclick = async () => {
+      try { await navigator.clipboard.writeText(text); toast('已複製'); }
+      catch (e) { const t = document.getElementById('cpText'); t.style.position = 'static'; t.style.width = '100%'; t.style.height = '200px'; t.select(); toast('請長按文字框選「拷貝」'); }
+    };
+    const clr = document.getElementById('clr');
+    if (clr) clr.onclick = () => modal('清除所有回饋？', '清除後就找不回來了。', [{ label: '清除', cls: 'danger', fn: () => { Store.del('feedback'); feedbackPage(); } }, { label: '取消', cls: 'ghost' }]);
+  }
+
   // ---------- 家長專區 ----------
   function unlocked() { const t = +sessionStorage.getItem('lz_unlock') || 0; return Date.now() - t < 15 * 60 * 1000; }
   function parent(sub, arg) {
@@ -664,6 +696,7 @@
     sessionStorage.setItem('lz_unlock', Date.now());
     if (sub === 'rec') return parentRecord(arg);
     if (sub === 'settings') return parentSettings();
+    if (sub === 'feedback') return feedbackPage();
     return parentDash(arg);
   }
   function parentSetup() {
@@ -773,6 +806,7 @@
 
       '<div style="margin-top:24px"><button class="btn" id="save">儲存設定</button></div>' +
       '<div class="label" style="margin-top:32px">其他</div>' +
+      '<button class="btn ghost" data-go="/parent/feedback">回答回饋（' + Store.get('feedback', []).length + ' 則）</button>' +
       '<button class="btn ghost" id="chpw">更改家長密碼</button>' +
       '<button class="btn danger" id="wipe">清除這支手機上的所有資料</button>' +
       '<div class="foot-note">' + esc(C.appName) + ' 版本 ' + esc(C.version) + '</div></div>');

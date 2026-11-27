@@ -273,3 +273,9 @@ body.pinyin .daily rt { color: rgba(255,255,255,.8); }
 .rec-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
 .rec-row .rec { margin: 0; flex: 1; min-width: 0; }
 .rec-del { width: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font-size: 16px; }
+
+/* ===== v0.6 ===== */
+.msg-ai .foot { align-items: center; gap: 8px; }
+.fb { display: inline-flex; gap: 4px; margin-right: auto; }
+.fb-b { font-size: 16px; padding: 4px 8px; border-radius: 14px; opacity: .45; }
+.fb-b.on { opacity: 1; background: #efede7; }
