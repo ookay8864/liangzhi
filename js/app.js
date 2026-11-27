@@ -171,19 +171,31 @@
       '<h2>' + esc(C.appName) + '</h2><p>' + esc(C.appSubtitle) + '</p></div>' +
       '<button class="choice" data-go="/kid"><span class="ic">🧒</span><span><div class="t">我是小朋友</div><div class="d">和' + esc(NAME) + '一起想一想</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult"><span class="ic" style="background:#f1efe8">🧭</span><span><div class="t">我是大人</div><div class="d">把兩難的事想清楚</div></span><span class="arrow">›</span></button>' +
-      '<div class="foot-note"><a href="#/parent" style="color:inherit">家長專區</a> · <a href="#/about" style="color:inherit">我們的原則與使用須知</a></div></div>'
+      '<div class="foot-note"><a href="#/parent" style="color:inherit">家長專區</a> · <a href="#/about" style="color:inherit">原則與使用須知</a></div></div>'
     );
   }
 
+  const PRIVACY_ROWS = [
+    ['不用註冊', '不問你的名字，也不需要帳號。'],
+    ['離開就刪除', '大人的對話只在這支手機上，除非你按「保留」，離開就刪除。'],
+    ['密碼保護', '保留的對話和孩子的紀錄，都要輸入家長密碼才能打開。'],
+    ['不會通知任何人', '大人的對話不會傳送任何通知。'],
+    ['孩子的紀錄', '孩子的對話會存在這支手機上，需要關心時會通知家長，讓家長能適時關心。'],
+    ['誠實告訴你', '為了回答你，你寫的話會交給 AI（DeepSeek）處理，對方可能會保存一段時間。建議用「我同事」「我朋友」代替真實名字。']
+  ];
+  function rowsCard(items, foot) {
+    return '<div class="terms">' + items.map((t, i) => '<div class="term"><span class="term-n">' + (i + 1) + '</span><div><b>' + esc(t[0]) + '</b>' + (t[1] ? '<div>' + esc(t[1]) + '</div>' : '') + '</div></div>').join('') +
+      (foot ? '<p class="small muted" style="margin:10px 0 0">' + esc(foot) + '</p>' : '') + '</div>';
+  }
   function about() {
-    render(top('我們的原則', '/') +
-      '<div class="screen"><p class="muted">這裡不替你下判斷，而是陪你想清楚。不管選哪一種回答方式，背後都是同一組良知底線：</p>' +
-      C.principles.map((p, i) => '<div class="choice" style="padding:14px"><span class="ic" style="width:32px;height:32px;font-size:15px;font-weight:600;color:#0f6e56">' + (i + 1) + '</span><span class="t" style="font-size:16px">' + esc(p) + '</span></div>').join('') +
-      '<div class="label">隱私</div><div class="story" style="font-size:15px">' + PRIVACY_HTML + '<p class="pv-x">孩子的紀錄會存在這支手機上，讓家長能看到並適時關心。</p></div>' +
-      '<div class="label">使用須知</div><div class="terms">' + TERMS.map((t, i) => '<div class="term"><span class="term-n">' + (i + 1) + '</span><div><b>' + esc(t[0]) + '</b><div>' + esc(t[1]) + '</div></div></div>').join('') +
-      '<p class="small muted" style="margin:10px 0 0">使用本網站，即表示你已了解並同意以上說明。</p></div>' +
-      '<div class="label">遇到危險的時候</div><div class="notice urgent">' + hotlinesHtml() + '</div>' +
-      '<p class="small muted">最後的決定和責任在你自己。涉及法律、醫療、財務的重大問題，請尋求專業人士協助。</p>' +
+    const terms = TERMS.map(t => t[0] === '緊急情況' ? ['緊急情況', '如果有立即的危險，請使用下方的求助電話。'] : t);
+    render(top('原則與使用須知', '/') +
+      '<div class="screen"><p class="muted small" style="margin:4px 0 0">這裡不替你下判斷，而是陪你想清楚。不管選哪一種回答方式，背後都是同一組良知底線。</p>' +
+      '<div class="label">我們的原則</div>' + rowsCard(C.principles.map(p => [p, ''])) +
+      '<div class="label">隱私</div>' + rowsCard(PRIVACY_ROWS) +
+      '<div class="label">使用須知</div>' + rowsCard(terms, '使用本網站，即表示你已了解並同意以上說明。') +
+      '<div class="label">求助電話</div><div class="terms">' + C.hotlines.map(h =>
+        '<div class="term hl"><div><b>' + esc(h.name) + '</b><div>' + esc(h.note) + '</div></div><a class="hl-n" href="tel:' + h.number + '">' + h.number + '</a></div>').join('') + '</div>' +
       '<div class="foot-note">版本 ' + esc(C.version) + '</div></div>');
   }
   function hotlinesHtml() {
@@ -199,7 +211,7 @@
       '<p class="center" style="font-size:18px;margin:0 0 24px">嗨！我是' + esc(NAME) + '，<br>點一下你的名字吧！</p>' +
       '<div class="kid-grid">' + kids.map(k =>
         '<button class="kid-card" data-go="/kid/' + k.id + '"><span class="avatar" style="background:' + k.color + '">' + esc(k.name.slice(0, 1)) + '</span>' + esc(k.name) + '</button>').join('') +
-      '</div>' + (kidMode ? '<div class="foot-note"><a href="#/parent" style="color:inherit">家長專區</a></div>' : '') + '</div>', { zone: 'kid' });
+      '</div>' + '<div class="foot-note">' + (kidMode ? '<a href="#/parent" style="color:inherit">家長專區</a> · ' : '') + '<a href="#/about" style="color:inherit">原則與使用須知</a></div>' + '</div>', { zone: 'kid' });
   }
 
   function dailyScene(kid) {
@@ -683,7 +695,7 @@
       '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">👨‍👩‍👦</span><span><div class="t">孩子的紀錄 <span class="lock-i">🔒</span>' + (urgent ? ' <span class="badge urgent">' + urgent + ' 則需要關心</span>' : '') + '</div><div class="d">孩子的煩惱和情境練習</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult/history"><span class="ic" style="background:#f1efe8">🗂️</span><span><div class="t">我的對話 <span class="lock-i">🔒</span></div><div class="d">保留的對話，可以接著聊</div></span><span class="arrow">›</span></button>' +
       '<p class="small muted center" style="margin-top:20px">對話只存在這支手機上，結束時由你決定要不要保留。</p>' +
-      '<div class="foot-note">' + (adultMode ? '<a href="#/kid" style="color:inherit">小孩版</a> · ' : '') + '<a href="#/about" style="color:inherit">我們的原則與使用須知</a></div></div>');
+      '<div class="foot-note">' + (adultMode ? '<a href="#/kid" style="color:inherit">小孩版</a> · ' : '') + '<a href="#/about" style="color:inherit">原則與使用須知</a></div></div>');
   }
 
   function adultHistory() {

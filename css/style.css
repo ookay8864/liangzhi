@@ -321,3 +321,5 @@ body.pinyin .daily rt { color: rgba(255,255,255,.8); }
 .lock-i { font-size: 12px; opacity: .6; }
 .choice .d { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .choice > span:nth-child(2) { min-width: 0; flex: 1; }
+.term.hl { align-items: center; justify-content: space-between; }
+.hl-n { font-size: 18px; font-weight: 600; color: var(--warn); text-decoration: none; }
