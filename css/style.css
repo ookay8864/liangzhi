@@ -323,3 +323,46 @@ body.pinyin .daily rt { color: rgba(255,255,255,.8); }
 .choice > span:nth-child(2) { min-width: 0; flex: 1; }
 .term.hl { align-items: center; justify-content: space-between; }
 .hl-n { font-size: 18px; font-weight: 600; color: var(--warn); text-decoration: none; }
+
+/* ===== v1.0 小夥伴 ===== */
+.pal-layer { position: fixed; left: 50%; transform: translateX(-50%); width: 100%; max-width: 520px; bottom: calc(66px + var(--safe-b)); height: 84px; pointer-events: none; z-index: 11; }
+.pal { position: absolute; bottom: 0; left: 0; width: 46px; height: 84px; pointer-events: auto; cursor: pointer; }
+.pal.is-cat { width: 78px; height: 66px; }
+.pal-art { width: 100%; height: 100%; }
+.pal-art svg { display: block; transition: transform .2s; }
+.pal.flip .pal-art svg { transform: scaleX(-1); }
+.pal.jump .pal-art { animation: palJump .55s ease; }
+@keyframes palJump { 40% { transform: translateY(-26px); } }
+.pal .lg1, .pal .lg2, .pal .ar1, .pal .ar2 { transform-box: view-box; }
+.pal.is-stick .lg1, .pal.is-stick .lg2 { transform-origin: 30px 66px; }
+.pal.is-stick .ar1, .pal.is-stick .ar2 { transform-origin: 30px 42px; }
+.pal.is-cat .lg1, .pal.is-cat .lg2 { transform-origin: 47px 56px; }
+.pal.walk .lg1, .pal.walk .ar2 { animation: palLeg .45s ease-in-out infinite alternate; }
+.pal.walk .lg2, .pal.walk .ar1 { animation: palLeg .45s ease-in-out infinite alternate-reverse; }
+.pal.is-cat.walk .lg1 { animation-name: catLeg; } .pal.is-cat.walk .lg2 { animation-name: catLeg; }
+@keyframes palLeg { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }
+@keyframes catLeg { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+.pal .tail { transform-box: view-box; transform-origin: 70px 46px; animation: tail 2.4s ease-in-out infinite alternate; }
+@keyframes tail { to { transform: rotate(-10deg); } }
+.pal-bubble { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 3px 10px; font-size: 13px; white-space: nowrap; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.pal-bubble.show { opacity: 1; }
+.pal-heart { position: absolute; top: 0; font-size: 16px; animation: palHeart 1.4s ease forwards; pointer-events: none; }
+@keyframes palHeart { to { transform: translateY(-50px); opacity: 0; } }
+body.has-pal .screen { padding-bottom: 210px !important; }
+body.has-pal.has-help .composer { bottom: 150px; }
+.pal-ic svg { width: 30px; height: 40px; }
+/* 夥伴設定頁 */
+.pal-preview { width: 90px; height: 165px; margin: 10px auto 0; }
+.pal-preview.is-cat { width: 160px; height: 135px; margin-top: 30px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 12px; }
+.sw { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--bg); box-shadow: 0 0 0 1px var(--line); }
+.sw.on { box-shadow: 0 0 0 3px var(--ink); }
+.sw-cat { flex: 1; min-width: 90px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); font-size: 14px; }
+.sw-cat.on { border-color: var(--ink); }
+.sw-mini { width: 60px; height: 50px; display: block; }
+.items { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); font-weight: 600; }
+.item.on { border-color: var(--accent); background: var(--accent-bg); }
+.item.locked { opacity: .55; font-weight: 400; }
+.item-ic { font-size: 26px; }
+.item-d { font-size: 12px; color: var(--muted); font-weight: 400; }

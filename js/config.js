@@ -6,7 +6,7 @@ window.CONFIG = {
   appName: '良知旋轉盤',
   appSubtitle: '遇到兩難的時候，陪你想清楚',
   kidCharacter: '轉轉',
-  version: '0.9.3',
+  version: '1.0.0',
 
   // 預設的孩子（家長專區可以修改、新增）
   defaultKids: [

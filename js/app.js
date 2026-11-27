@@ -107,6 +107,7 @@
     Lang.setZone(opts.zone || (kid ? 'kid' : 'adult'), kid && kid.pinyin);
     document.body.classList.toggle('has-help', !!kid && !opts.noHelp);
     app.innerHTML = html + (kid && !opts.noHelp ? '<div class="helpbar"><button data-go="/kid/' + kid.id + '/help">找爸爸媽媽幫忙</button></div>' : '');
+    if (kid && !opts.noHelp && !opts.noPal) Pal.mount(kid); else Pal.unmount();
     window.scrollTo(0, 0);
   }
   const levelName = { urgent: '需要關心', concern: '一般煩惱', normal: '聊天' };
@@ -133,6 +134,11 @@
     d.innerHTML = '<div class="cel-box"><div class="cel-st pop">' + sticker + '</div><div>' + esc(text) + '</div><button class="btn" style="margin-top:14px">好耶！</button></div>';
     document.body.appendChild(d); Lang.localize(d);
     d.querySelector('button').onclick = () => d.remove();
+  }
+  // 夥伴開心：出現笑臉，解鎖配件時慶祝
+  function palHappy(kid, msg) {
+    const it = Pal.happy(kid, msg);
+    if (it) setTimeout(() => celebrate(it.icon, '你的夥伴開心了 ' + it.need + ' 次，得到新配件：' + it.name + '！'), 1600);
   }
   // 孩子說的話存成紀錄，需要時通知家長
   function saveKidRecord(kid, record, text, r, extra) {
@@ -226,6 +232,7 @@
   function kidHome(kid) {
     const d = dailyScene(kid);
     const n = Store.stickers(kid.id).length;
+    const pal = Pal.get(kid.id);
     render(top('', Store.settings().deviceMode === 'kid' ? '/' : '/kid', starPill(kid)) +
       '<div class="screen"><div class="buddy">' + buddy(48) + '<div style="padding-top:4px"><b>嗨，' + esc(kid.name) + '！</b><br>今天想做什麼呢？</div></div>' +
       '<button class="daily" data-go="/kid/' + kid.id + '/scene/' + d.id + '"><div class="small" style="opacity:.8">今天的情境卡</div>' +
@@ -233,7 +240,41 @@
       '<button class="choice" data-go="/kid/' + kid.id + '/scenes"><span class="ic" style="background:#faeeda">🎲</span><span><div class="t">玩一玩</div><div class="d">選一張情境卡，看看你會怎麼做</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/kid/' + kid.id + '/talk"><span class="ic">💬</span><span><div class="t">說說我的煩惱</div><div class="d">' + esc(NAME) + '陪你一起想</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/kid/' + kid.id + '/stickers"><span class="ic" style="background:#fbeaf0">📒</span><span><div class="t">我的貼紙冊</div><div class="d">已經收集 ' + n + ' 張</div></span><span class="arrow">›</span></button>' +
+      '<button class="choice" data-go="/kid/' + kid.id + '/pal"><span class="ic pal-ic">' + (pal ? Pal.svg(pal, 'blank') : '🐾') + '</span><span><div class="t">' + (pal ? '我的夥伴' : '選一個小夥伴') + '</div><div class="d">' + (pal ? '開心了 ' + (pal.happy || 0) + ' 次，換換衣服和顏色' : '火柴人或小貓，陪你走來走去') + '</div></span><span class="arrow">›</span></button>' +
       '</div>', { kid });
+  }
+
+  function palPage(kid) {
+    let p = Pal.get(kid.id) || { type: 'stick', color: 'blue', happy: 0, wear: {} };
+    const isNew = !Pal.get(kid.id);
+    function draw() {
+      const n = p.happy || 0;
+      const swatches = p.type === 'stick'
+        ? Pal.STICK_COLORS.map(c => '<button class="sw' + (p.color === c[0] ? ' on' : '') + '" data-c="' + c[0] + '" style="background:' + c[2] + '" aria-label="' + c[1] + '"></button>').join('')
+        : Pal.CAT_COLORS.map(c => '<button class="sw-cat' + (p.color === c[0] ? ' on' : '') + '" data-c="' + c[0] + '"><span class="sw-mini">' + Pal.svg({ type: 'cat', color: c[0] }, 'blank') + '</span>' + c[1] + '</button>').join('');
+      render(top('我的夥伴', '/kid/' + kid.id, starPill(kid)) +
+        '<div class="screen"><div class="pal-preview ' + (p.type === 'cat' ? 'is-cat' : '') + '">' + Pal.svg(p, 'blank') + '</div>' +
+        '<p class="center muted small" style="margin:4px 0 0">' + (isNew ? '選一個陪你的小夥伴吧！' : '你的夥伴已經開心了 ' + n + ' 次') + '</p>' +
+        '<div class="label">夥伴</div><div class="seg" id="ptype"><button data-t="stick" class="' + (p.type === 'stick' ? 'on' : '') + '">火柴人</button><button data-t="cat" class="' + (p.type === 'cat' ? 'on' : '') + '">小貓</button></div>' +
+        '<div class="label">顏色</div><div class="swatches">' + swatches + '</div>' +
+        '<div class="label">配件（讓夥伴開心就能解鎖）</div><div class="items">' + Pal.ITEMS.map(it => {
+          const got = n >= it.need, on = (p.wear || {})[it.slot] === it.id;
+          return '<button class="item' + (got ? '' : ' locked') + (on ? ' on' : '') + '" data-it="' + it.id + '"' + (got ? '' : ' disabled') + '><span class="item-ic">' + (got ? it.icon : '🔒') + '</span><span>' + it.name + '</span><span class="item-d">' + (got ? (on ? '穿戴中' : '點一下穿上') : '再開心 ' + (it.need - n) + ' 次') + '</span></button>';
+        }).join('') + '</div>' +
+        '<p class="small muted center" style="margin-top:14px">玩完情境卡、跟轉轉說完話，夥伴都會很開心喔！</p>' +
+        '<button class="btn accent" id="palDone" style="margin-top:12px">' + (isNew ? '就是它了！' : '好了') + '</button></div>', { kid, noPal: true });
+      app.querySelectorAll('#ptype [data-t]').forEach(b => b.onclick = () => {
+        if (p.type === b.dataset.t) return;
+        p.type = b.dataset.t; p.color = p.type === 'cat' ? 'white' : 'blue'; draw();
+      });
+      app.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { p.color = b.dataset.c; draw(); });
+      app.querySelectorAll('[data-it]').forEach(b => b.onclick = () => {
+        const it = Pal.ITEMS.find(x => x.id === b.dataset.it); p.wear = p.wear || {};
+        p.wear[it.slot] = p.wear[it.slot] === it.id ? '' : it.id; draw();
+      });
+      document.getElementById('palDone').onclick = () => { Pal.save(kid.id, p); go('/kid/' + kid.id); };
+    }
+    draw();
   }
 
   function stickerBook(kid) {
@@ -366,6 +407,7 @@
           '<button class="btn" data-go="' + base + '/scenes">再玩一張</button>' +
           '<button class="btn ghost" data-go="' + base + '/stickers">看我的貼紙冊</button>' +
           '<button class="btn ghost" data-go="' + base + '">回到首頁</button></div>', { kid });
+        palHappy(kid, '完成了，好開心！');
       } else {
         const prefill = '情境：' + s.steps.map(x => x.story).join(' ') + '\n我的選擇：' + picks.join('、') + '\n我想多聊聊這個選擇。';
         sessionStorage.setItem('lz_prefill', prefill);
@@ -530,6 +572,7 @@
       catch (e) { entry.error = AI.errorText(e); }
       entry.loading = false; busy = false; summarizedAt = rounds();
       if (entry.data && record && isKid) { record.summaryCard = entry.data; Store.saveRecord(record); }
+      if (entry.data && isKid) palHappy(kid, '想清楚了，好開心！');
       if (!isKid && saved) keep();
       comp.fit(); draw();
     }
@@ -575,7 +618,7 @@
       if (main) comp.inp.setAttribute('placeholder', Lang.conv(isKid ? '還想說什麼嗎？寫下來或按麥克風' : '繼續說說你的想法…'));
       if (main && !isKid && saved) keep();
       closed = !!(main && main.closing);
-      if (main && isKid && main.closing && !main.silly) giveStars(kid, 1);
+      if (main && isKid && main.closing && !main.silly) { giveStars(kid, 1); palHappy(kid, '謝謝你跟我說！'); }
       if (main && isKid) {
         if (main.silly) sillyCount++; else { sillyCount = 0; giveStars(kid, 1); }
         record = saveKidRecord(kid, record, text, main, {
@@ -974,6 +1017,7 @@
       if (p[2] === 'talk') return talk('kid', kid);
       if (p[2] === 'help') return kidHelp(kid);
       if (p[2] === 'stickers') return stickerBook(kid);
+      if (p[2] === 'pal') return palPage(kid);
       return kidHome(kid);
     }
     if (p[0] === 'adult') {
