@@ -65,6 +65,15 @@
     document.body.appendChild(d); Lang.localize(d);
     d.onclick = e => { const b = e.target.closest('[data-mi]'); if (b) { d.remove(); const f = buttons[+b.dataset.mi].fn; if (f) f(); } else if (e.target === d) d.remove(); };
   }
+  // 使用須知
+  const TERMS = [
+    ['僅供參考', '回答由 AI 自動產生，目的是陪你整理想法、從不同角度思考，不代表本網站的立場，也不是任何形式的專業意見。'],
+    ['AI 可能出錯', 'AI 的回答可能不完整、不準確，或不適合你的實際情況，請自行判斷。'],
+    ['決定由你負責', '所有決定和行動都由使用者自行判斷並承擔責任。對於因使用本網站內容而產生的任何直接或間接後果，本網站及開發者不負任何責任。'],
+    ['不能取代專業協助', '涉及法律、醫療、心理健康、財務等重要問題，請諮詢合格的專業人士，例如律師、醫生、心理諮商師。'],
+    ['緊急情況', '如果你或身邊的人有立即的危險，請立刻撥打 110；心裡很難受需要有人聽時，可以撥打心理援助熱線 12356。'],
+    ['兒童使用', '小孩版應在家長同意和陪伴下使用。']
+  ];
   // 大人版隱私說明（第一次聊天前跳出）
   const PRIVACY_HTML =
     '<p class="pv-lead">想說什麼都可以，不用整理、不用怕說錯。</p>' +
@@ -79,8 +88,10 @@
     const d = document.createElement('div'); d.className = 'celebrate';
     d.innerHTML = '<div class="cel-box modal-box pv-box"><div class="pv-title">' + lamp(34) + '<span>說說心裡話，照照心底事</span></div>' + PRIVACY_HTML +
       '<button class="btn accent" id="pvOk">我知道了，開始聊</button>' +
-      (force ? '' : '<label class="pv-check"><input type="checkbox" id="pvNo">下次不用再提醒</label>') + '</div>';
+      (force ? '' : '<label class="pv-check"><input type="checkbox" id="pvNo">下次不用再提醒</label>') +
+      '<p class="pv-foot">AI 的回答僅供參考，決定由你自己判斷。<a href="#/about">使用須知</a></p></div>';
     document.body.appendChild(d); Lang.localize(d);
+    const ab = d.querySelector('.pv-foot a'); if (ab) ab.onclick = () => d.remove();
     d.querySelector('#pvOk').onclick = () => {
       const cb = d.querySelector('#pvNo'); if (cb && cb.checked) Store.set('privacyAck', true);
       d.remove();
@@ -160,7 +171,7 @@
       '<h2>' + esc(C.appName) + '</h2><p>' + esc(C.appSubtitle) + '</p></div>' +
       '<button class="choice" data-go="/kid"><span class="ic">🧒</span><span><div class="t">我是小朋友</div><div class="d">和' + esc(NAME) + '一起想一想</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult"><span class="ic" style="background:#f1efe8">🧭</span><span><div class="t">我是大人</div><div class="d">把兩難的事想清楚</div></span><span class="arrow">›</span></button>' +
-      '<div class="foot-note"><a href="#/parent" style="color:inherit">家長專區</a> · <a href="#/about" style="color:inherit">我們的原則</a></div></div>'
+      '<div class="foot-note"><a href="#/parent" style="color:inherit">家長專區</a> · <a href="#/about" style="color:inherit">我們的原則與使用須知</a></div></div>'
     );
   }
 
@@ -169,6 +180,8 @@
       '<div class="screen"><p class="muted">這裡不替你下判斷，而是陪你想清楚。不管選哪一種回答方式，背後都是同一組良知底線：</p>' +
       C.principles.map((p, i) => '<div class="choice" style="padding:14px"><span class="ic" style="width:32px;height:32px;font-size:15px;font-weight:600;color:#0f6e56">' + (i + 1) + '</span><span class="t" style="font-size:16px">' + esc(p) + '</span></div>').join('') +
       '<div class="label">隱私</div><div class="story" style="font-size:15px">' + PRIVACY_HTML + '<p class="pv-x">孩子的紀錄會存在這支手機上，讓家長能看到並適時關心。</p></div>' +
+      '<div class="label">使用須知</div><div class="terms">' + TERMS.map((t, i) => '<div class="term"><span class="term-n">' + (i + 1) + '</span><div><b>' + esc(t[0]) + '</b><div>' + esc(t[1]) + '</div></div></div>').join('') +
+      '<p class="small muted" style="margin:10px 0 0">使用本網站，即表示你已了解並同意以上說明。</p></div>' +
       '<div class="label">遇到危險的時候</div><div class="notice urgent">' + hotlinesHtml() + '</div>' +
       '<p class="small muted">最後的決定和責任在你自己。涉及法律、醫療、財務的重大問題，請尋求專業人士協助。</p>' +
       '<div class="foot-note">版本 ' + esc(C.version) + '</div></div>');
@@ -422,7 +435,7 @@
       '<div class="chat" id="chat" style="margin-top:18px"></div>' +
       '<div id="tail"></div>' +
       '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或按麥克風說話' : '例如：同事拜託我幫他隱瞞一個錯誤…', topHtml) +
-      (isKid ? '' : '<div class="end-row"><button id="endBtn">結束對話</button></div>') + '</div>' +
+      (isKid ? '' : '<div class="end-row"><button id="endBtn">結束對話</button><div class="ai-note">AI 回答僅供參考</div></div>') + '</div>' +
       '</div>', isKid ? { kid } : null);
 
     const chat = document.getElementById('chat');
@@ -664,12 +677,13 @@
     render(top('', adultMode ? '' : '/') +
       '<div class="screen"><div class="buddy">' + lamp(48) + '<div style="padding-top:4px"><b>遇到兩難了嗎？</b><br><span class="muted">很多事沒有標準答案，我們一起想清楚。</span></div></div>' +
       '<div style="height:12px"></div>' +
-      '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">👨‍👩‍👦</span><span><div class="t">孩子的紀錄' + (urgent ? ' <span class="badge urgent">' + urgent + ' 則需要關心</span>' : '') + '</div><div class="d">查看孩子的煩惱和情境練習（需要密碼）</div></span><span class="arrow">›</span></button>' +
-      '<button class="choice" data-go="/adult/talk"><span class="ic">✍️</span><span><div class="t">說出我的困境</div><div class="d">寫下或說出你正在猶豫的事</div></span><span class="arrow">›</span></button>' +
-      '<button class="choice" data-go="/adult/history"><span class="ic" style="background:#f1efe8">🗂️</span><span><div class="t">我的對話</div><div class="d">回去看保留的對話，也能接著聊（需要密碼）</div></span><span class="arrow">›</span></button>' +
       '<button class="choice" data-go="/adult/scenes"><span class="ic" style="background:#faeeda">🎲</span><span><div class="t">情境練習</div><div class="d">從常見的兩難情境開始</div></span><span class="arrow">›</span></button>' +
+      '<button class="hero-card" data-go="/adult/talk"><div class="hc-top"><span class="hc-ic">✍️</span><span class="hc-t">說出我的困境</span></div>' +
+      '<div class="hc-d">寫下或說出你正在猶豫的事，我們一起想清楚</div><div class="hc-go">開始說 →</div></button>' +
+      '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">👨‍👩‍👦</span><span><div class="t">孩子的紀錄' + (urgent ? ' <span class="badge urgent">' + urgent + ' 則需要關心</span>' : '') + '</div><div class="d">查看孩子的煩惱和情境練習（需要密碼）</div></span><span class="arrow">›</span></button>' +
+      '<button class="choice" data-go="/adult/history"><span class="ic" style="background:#f1efe8">🗂️</span><span><div class="t">我的對話</div><div class="d">回去看保留的對話，也能接著聊（需要密碼）</div></span><span class="arrow">›</span></button>' +
       '<p class="small muted center" style="margin-top:20px">對話只存在這支手機上，結束時由你決定要不要保留。</p>' +
-      '<div class="foot-note">' + (adultMode ? '<a href="#/kid" style="color:inherit">小孩版</a> · ' : '') + '<a href="#/about" style="color:inherit">我們的原則</a></div></div>');
+      '<div class="foot-note">' + (adultMode ? '<a href="#/kid" style="color:inherit">小孩版</a> · ' : '') + '<a href="#/about" style="color:inherit">我們的原則與使用須知</a></div></div>');
   }
 
   function adultHistory() {
