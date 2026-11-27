@@ -65,6 +65,27 @@
     document.body.appendChild(d); Lang.localize(d);
     d.onclick = e => { const b = e.target.closest('[data-mi]'); if (b) { d.remove(); const f = buttons[+b.dataset.mi].fn; if (f) f(); } else if (e.target === d) d.remove(); };
   }
+  // 大人版隱私說明（第一次聊天前跳出）
+  const PRIVACY_HTML =
+    '<p class="pv-lead">想說什麼都可以，不用整理、不用怕說錯。</p>' +
+    '<div class="pv-h">🔒 我們這樣保護你：</div><ul class="pv-list">' +
+    '<li>不用註冊，不問你的名字</li>' +
+    '<li>對話只在這支手機上，除非你按「保留」，離開就刪除</li>' +
+    '<li>保留的對話要輸入密碼才能打開</li>' +
+    '<li>不會通知任何人</li></ul>' +
+    '<div class="pv-h">誠實告訴你一件事：</div>' +
+    '<p class="pv-x">為了回答你，你寫的話會交給 AI（DeepSeek）處理，對方可能會保存一段時間。所以建議用「我同事」「我朋友」代替真實名字，AI 一樣能好好陪你想。</p>';
+  function privacyModal(force) {
+    const d = document.createElement('div'); d.className = 'celebrate';
+    d.innerHTML = '<div class="cel-box modal-box pv-box"><div class="pv-title">' + lamp(34) + '<span>說說心裡話，照照心底事</span></div>' + PRIVACY_HTML +
+      '<button class="btn accent" id="pvOk">我知道了，開始聊</button>' +
+      (force ? '' : '<label class="pv-check"><input type="checkbox" id="pvNo">下次不用再提醒</label>') + '</div>';
+    document.body.appendChild(d); Lang.localize(d);
+    d.querySelector('#pvOk').onclick = () => {
+      const cb = d.querySelector('#pvNo'); if (cb && cb.checked) Store.set('privacyAck', true);
+      d.remove();
+    };
+  }
   // 離開保護：對話還沒保留時，離開前先問
   let guard = null;
   function render(html, opts) {
@@ -147,6 +168,7 @@
     render(top('我們的原則', '/') +
       '<div class="screen"><p class="muted">這裡不替你下判斷，而是陪你想清楚。不管選哪一種回答方式，背後都是同一組良知底線：</p>' +
       C.principles.map((p, i) => '<div class="choice" style="padding:14px"><span class="ic" style="width:32px;height:32px;font-size:15px;font-weight:600;color:#0f6e56">' + (i + 1) + '</span><span class="t" style="font-size:16px">' + esc(p) + '</span></div>').join('') +
+      '<div class="label">隱私</div><div class="story" style="font-size:15px">' + PRIVACY_HTML + '<p class="pv-x">孩子的紀錄會存在這支手機上，讓家長能看到並適時關心。</p></div>' +
       '<div class="label">遇到危險的時候</div><div class="notice urgent">' + hotlinesHtml() + '</div>' +
       '<p class="small muted">最後的決定和責任在你自己。涉及法律、醫療、財務的重大問題，請尋求專業人士協助。</p>' +
       '<div class="foot-note">版本 ' + esc(C.version) + '</div></div>');
@@ -396,7 +418,7 @@
     render(top(isKid ? '說說我的煩惱' : '說出我的困境', base, isKid ? starPill(kid) : '') +
       '<div class="screen" style="padding-bottom:' + (isKid ? '150px' : '40px') + '">' +
       '<div class="buddy">' + (isKid ? buddy(44) : lamp(44)) + '<div class="msg-ai" style="flex:1"><div class="body"><p>' + esc(greet) + '</p></div><div class="foot">' + speakBtn(greet) + '</div></div></div>' +
-      (isKid ? '' : '<div class="small muted center" id="keepNote" style="margin-top:8px">' + (saved ? '這是保留的對話，會自動更新。' : '🔒 沒有保留的對話，離開後就會刪除。') + '</div>') +
+      (isKid ? '' : '<button class="small muted center keep-note" id="keepNote">' + (saved ? '這是保留的對話，會自動更新。' : '🔒 沒有保留的對話，離開後就會刪除。') + ' <u>隱私說明</u></button>') +
       '<div class="chat" id="chat" style="margin-top:18px"></div>' +
       '<div id="tail"></div>' +
       '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或按麥克風說話' : '例如：同事拜託我幫他隱瞞一個錯誤…', topHtml) +
@@ -415,7 +437,7 @@
       record.summary = first ? first.text.slice(0, 40) : '';
       record.updated = Date.now();
       Store.saveRecord(record); saved = true;
-      const kn = document.getElementById('keepNote'); if (kn) kn.textContent = Lang.conv('這是保留的對話，會自動更新。');
+      const kn = document.getElementById('keepNote'); if (kn) { kn.innerHTML = '這是保留的對話，會自動更新。 <u>隱私說明</u>'; Lang.localize(kn); }
     }
     function endFlow(dest) {
       dest = dest || '/adult';
@@ -427,6 +449,8 @@
       ]);
     }
     if (!isKid) {
+      document.getElementById('keepNote').onclick = () => privacyModal(true);
+      if (!resumeId && !Store.get('privacyAck', false)) privacyModal(false);
       guard = { hash: location.hash, needs: () => !saved && msgs.some(m => m.role === 'user'), show: endFlow };
       document.getElementById('endBtn').onclick = () => msgs.some(m => m.role === 'user') ? endFlow('/adult') : go('/adult');
     }
