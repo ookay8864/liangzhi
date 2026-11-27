@@ -307,3 +307,14 @@ body.pinyin .daily rt { color: rgba(255,255,255,.8); }
 .hc-t { font-size: 20px; font-weight: 600; }
 .hc-d { font-size: 14px; opacity: .85; margin-top: 10px; }
 .hc-go { margin-top: 14px; display: inline-block; background: #fff; color: var(--accent-ink); font-weight: 600; font-size: 14px; padding: 7px 16px; border-radius: 18px; }
+
+/* ===== v0.9.1 數字鍵盤 ===== */
+.dots { display: flex; justify-content: center; gap: 14px; min-height: 16px; }
+.dots span { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--ink); }
+.dots span.on { background: var(--ink); }
+.dots.shake { animation: shake .4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.pad { display: grid; grid-template-columns: repeat(3, 72px); gap: 16px 28px; justify-content: center; }
+.pad-k { width: 72px; height: 72px; border-radius: 50%; background: var(--card); border: 1px solid var(--line); font-size: 28px; font-weight: 400; }
+.pad-k:active { background: #e8e6df; }
+.pad-k[data-k="⌫"] { border: none; background: none; font-size: 24px; color: var(--muted); }

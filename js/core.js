@@ -182,13 +182,16 @@ window.Secure = (function () {
       const kSalt = crypto.getRandomValues(new Uint8Array(16));
       const hash = await pbkdf2(pw, vSalt, 256);
       const key = await pbkdf2(pw, kSalt, 256);
-      Store.set('pw', { s: b64(vSalt), h: b64(hash), ks: b64(kSalt), k: b64(key) });
+      Store.set('pw', { s: b64(vSalt), h: b64(hash), ks: b64(kSalt), k: b64(key), len: pw.length });
     },
     async check(pw) {
       const p = Store.get('pw', null); if (!p) return false;
       const hash = await pbkdf2(pw, unb64(p.s), 256);
-      return b64(hash) === p.h;
+      const ok = b64(hash) === p.h;
+      if (ok && !p.len) { p.len = pw.length; Store.set('pw', p); }
+      return ok;
     },
+    pinLength() { const p = Store.get('pw', null); return p && p.len ? p.len : 0; },
     // 用這支手機存的金鑰加密，產生可放進連結的字串
     async seal(obj) {
       const p = Store.get('pw', null); if (!p) return null;

@@ -755,18 +755,45 @@
       if (/^#\/adult\/(history|talk\/)/.test(location.hash)) route(); else go('/parent/settings');
     };
   }
+  // 數字鍵盤：點進來就直接按數字，對了自動進入，錯了回到上一頁
+  function pinPad(title, onCheck, onWrong, manual) {
+    const known = manual ? 0 : Secure.pinLength();
+    render(top(title, '/') +
+      '<div class="screen"><div class="center" style="margin:28px 0 18px"><div style="font-size:36px">🔒</div><p class="muted" style="margin:6px 0 14px">請輸入家長密碼</p>' +
+      '<div class="dots" id="dots">' + Array.from({ length: known || 4 }, () => '<span></span>').join('') + '</div><div class="err" id="err"></div></div>' +
+      '<div class="pad">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].map(k => k ? '<button class="pad-k" data-k="' + k + '">' + k + '</button>' : '<span></span>').join('') + '</div>' +
+      (known ? '' : '<button class="btn" id="padOk" style="margin-top:16px">確認</button>') + '</div>');
+    let val = '', busy = false;
+    const dots = document.getElementById('dots');
+    function paint() {
+      const n = Math.max(known || 4, val.length);
+      dots.innerHTML = Array.from({ length: n }, (_, i) => '<span class="' + (i < val.length ? 'on' : '') + '"></span>').join('');
+    }
+    async function tryIt() {
+      if (busy || !val) return;
+      busy = true;
+      const ok = await onCheck(val);
+      busy = false;
+      if (ok) return;
+      dots.classList.add('shake');
+      document.getElementById('err').textContent = Lang.conv('密碼不正確');
+      setTimeout(() => { if (onWrong) onWrong(); else { val = ''; paint(); dots.classList.remove('shake'); } }, 700);
+    }
+    app.querySelectorAll('.pad-k').forEach(b => b.onclick = () => {
+      if (busy) return;
+      const k = b.dataset.k;
+      if (k === '⌫') val = val.slice(0, -1); else if (val.length < 12) val += k;
+      document.getElementById('err').textContent = ''; paint();
+      if (known && val.length === known) tryIt();
+    });
+    const po = document.getElementById('padOk'); if (po) po.onclick = tryIt;
+  }
   function parentGate(next) {
-    render(top('家長專區', '/') +
-      '<div class="screen"><div class="center" style="margin:40px 0 20px"><div style="font-size:40px">🔒</div><p class="muted">請輸入家長密碼</p></div>' +
-      '<div class="field"><input type="password" id="pw" class="pin" inputmode="numeric" autocomplete="current-password"><div class="err" id="err"></div></div>' +
-      '<button class="btn" id="ok">進入</button></div>');
-    const pw = document.getElementById('pw'); pw.focus();
-    const ok = async () => {
-      if (await Secure.check(pw.value)) { sessionStorage.setItem('lz_unlock', Date.now()); next(); }
-      else { document.getElementById('err').textContent = Lang.conv('密碼不正確'); pw.value = ''; }
-    };
-    document.getElementById('ok').onclick = ok;
-    pw.onkeydown = e => { if (e.key === 'Enter') ok(); };
+    const back = () => { if (history.length > 1) history.back(); else go('/'); };
+    pinPad('家長專區', async v => {
+      if (await Secure.check(v)) { sessionStorage.setItem('lz_unlock', Date.now()); next(); return true; }
+      return false;
+    }, back);
   }
   function parentDash(tab) {
     const kids = Store.kids();
@@ -898,14 +925,7 @@
 
   // ---------- 家長在自己手機上看通知裡的紀錄 ----------
   function viewShared(token) {
-    render(top('查看紀錄', '/') +
-      '<div class="screen"><div class="center" style="margin:32px 0 16px"><div style="font-size:40px">🔒</div><p class="muted">請輸入家長密碼</p></div>' +
-      '<div class="field"><input type="password" id="pw" class="pin" inputmode="numeric"><div class="err" id="err"></div></div>' +
-      '<button class="btn" id="ok">查看</button></div>');
-    const pw = document.getElementById('pw');
-    const ok = async () => {
-      try {
-        const d = await Secure.open(token, pw.value);
+    const showIt = d => {
         render(top(d.kid + ' 的紀錄', '/') +
           '<div class="screen"><div class="notice privacy"><b>這是孩子的真心話。</b>請不要直接拿著紀錄去問他，也不要轉告別人。</div>' +
           '<div class="muted small">' + timeStr(d.t) + ' · <span class="badge ' + (d.level || 'normal') + '">' + (levelName[d.level] || '') + '</span></div>' +
@@ -913,12 +933,10 @@
           (d.text ? '<div class="label">孩子說的話</div><div class="story" style="font-size:15px;white-space:pre-wrap">' + esc(d.text) + '</div>' : '') +
           (d.tip ? '<div class="notice privacy" style="margin-top:14px"><b>怎麼開口：</b>' + esc(d.tip) + '</div>' : '') +
           '<p class="small muted" style="margin-top:20px">完整對話在孩子用的手機上，可以在那邊的家長專區查看。</p></div>');
-      } catch (e) {
-        document.getElementById('err').textContent = Lang.conv('密碼不正確，或連結不完整'); pw.value = '';
-      }
     };
-    document.getElementById('ok').onclick = ok;
-    pw.onkeydown = e => { if (e.key === 'Enter') ok(); };
+    pinPad('查看紀錄', async v => {
+      try { const d = await Secure.open(token, v); showIt(d); return true; } catch (e) { return false; }
+    }, null, true);
   }
 
   // ---------- 路由 ----------
@@ -931,6 +949,8 @@
     const raw = location.hash.replace(/^#/, '') || '/';
     const [path, query] = raw.split('?');
     const p = path.split('/').filter(Boolean);
+    const isProtected = p[0] === 'parent' || (p[0] === 'adult' && (p[1] === 'history' || (p[1] === 'talk' && p[2])));
+    if (!isProtected) sessionStorage.removeItem('lz_unlock');
     if (p[0] === 'view') { const m = (query || '').match(/d=([^&]+)/); return m ? viewShared(m[1]) : home(); }
     if (p[0] === 'about') return about();
     if (p[0] === 'kid') {
