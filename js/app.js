@@ -605,10 +605,10 @@
           r.fb = b.dataset.fv;
           const all = Store.get('feedback', []);
           all.unshift({ time: Date.now(), vote: r.fb, reason: reason || '', version: vname(vid), q, a: r.reply });
-          Store.set('feedback', all.slice(0, 100)); draw(); toast('謝謝你的回饋');
+          Store.set('feedback', all.slice(0, 100)); draw(); toast('已記下，之後的回答會參考你的喜好');
         };
         if (b.dataset.fv === 'up') return saveFb('');
-        modal('哪裡不喜歡？', '你的回饋會存在這支手機的家長專區，之後可以拿來調整回答。', ['太表面', '像心靈雞湯', '太長', '沒抓到重點', '語氣不對'].map(x => ({ label: x, cls: 'ghost', fn: () => saveFb(x) })).concat([{ label: '取消', cls: 'ghost' }]));
+        modal('哪裡不喜歡？', '回饋只存在這支手機上。之後的回答會參考你的喜好，也可以在家長專區複製給 Claude 做更大的調整。', ['太表面', '像心靈雞湯', '太長', '沒抓到重點', '語氣不對'].map(x => ({ label: x, cls: 'ghost', fn: () => saveFb(x) })).concat([{ label: '取消', cls: 'ghost' }]));
       });
       chat.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { msgs[+b.dataset.m].active = b.dataset.tab; draw(); });
       chat.querySelectorAll('[data-add]').forEach(b => b.onclick = () => pickExtra(+b.dataset.m));

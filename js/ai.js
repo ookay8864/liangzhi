@@ -60,8 +60,21 @@ window.AI = (function () {
     '不好的回答（雞湯）：「發火很正常，每個父母都會有情緒。重要的是照顧好自己的情緒，和孩子好好溝通。」\n' +
     '好的回答：「你問的是怎麼冷靜，但我覺得真正讓你難受的，是發完火之後的那個自己。你不想成為靠吼讓孩子聽話的父母。這份難受就是你的良知，它不是在責備你，是在提醒你：你要的是孩子尊重你，不是怕你。所以重點也許不是壓住火，而是事後願不願意對孩子說一句「我剛剛吼你，是我沒做好」。我想問你：你希望孩子長大後，記得的是一個什麼樣的你？」\n';
 
+  // 使用者按過的 👍👎，當作他的喜好參考（只在這支手機上）
+  function prefs() {
+    const fb = Store.get('feedback', []);
+    const cut = t => String(t || '').replace(/\s+/g, ' ').slice(0, 160);
+    const ups = fb.filter(f => f.vote === 'up').slice(0, 2);
+    const downs = fb.filter(f => f.vote === 'down').slice(0, 3);
+    if (!ups.length && !downs.length) return '';
+    let t = '\n這位使用者的喜好（從他按過的讚和倒讚整理，請照著調整語氣和深度）：\n';
+    ups.forEach(f => { t += '- 他喜歡這種回答：「' + cut(f.a) + '」\n'; });
+    downs.forEach(f => { t += '- 他不喜歡這種回答（原因：' + (f.reason || '不喜歡') + '）：「' + cut(f.a) + '」\n'; });
+    return t;
+  }
+
   function adultSystem(version) {
-    return LIANGZHI + '\n' + core('adult') + '\n\n' +
+    return LIANGZHI + prefs() + '\n' + core('adult') + '\n\n' +
       '這次的回答長度和風格：' + version.style + '\n\n' +
       '安全規則：如果對方提到想傷害自己或別人、正在遭受暴力、或有人有立即危險，level 設為 "urgent"，回應要先關心他的安全，請他立刻聯絡身邊信任的人或撥打求助電話（緊急 110，心理援助 12356），不要繼續一般分析。涉及法律、醫療、財務的重大問題，提醒尋求專業人士。\n\n' +
       '結束與繞圈：\n' +
