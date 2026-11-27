@@ -680,8 +680,8 @@
       '<button class="choice" data-go="/adult/scenes"><span class="ic" style="background:#faeeda">🎲</span><span><div class="t">情境練習</div><div class="d">從常見的兩難情境開始</div></span><span class="arrow">›</span></button>' +
       '<button class="hero-card" data-go="/adult/talk"><div class="hc-top"><span class="hc-ic">✍️</span><span class="hc-t">說出我的困境</span></div>' +
       '<div class="hc-d">寫下或說出你正在猶豫的事，我們一起想清楚</div><div class="hc-go">開始說 →</div></button>' +
-      '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">👨‍👩‍👦</span><span><div class="t">孩子的紀錄' + (urgent ? ' <span class="badge urgent">' + urgent + ' 則需要關心</span>' : '') + '</div><div class="d">查看孩子的煩惱和情境練習（需要密碼）</div></span><span class="arrow">›</span></button>' +
-      '<button class="choice" data-go="/adult/history"><span class="ic" style="background:#f1efe8">🗂️</span><span><div class="t">我的對話</div><div class="d">回去看保留的對話，也能接著聊（需要密碼）</div></span><span class="arrow">›</span></button>' +
+      '<button class="choice" data-go="/parent"><span class="ic" style="background:#f1efe8">👨‍👩‍👦</span><span><div class="t">孩子的紀錄 <span class="lock-i">🔒</span>' + (urgent ? ' <span class="badge urgent">' + urgent + ' 則需要關心</span>' : '') + '</div><div class="d">孩子的煩惱和情境練習</div></span><span class="arrow">›</span></button>' +
+      '<button class="choice" data-go="/adult/history"><span class="ic" style="background:#f1efe8">🗂️</span><span><div class="t">我的對話 <span class="lock-i">🔒</span></div><div class="d">保留的對話，可以接著聊</div></span><span class="arrow">›</span></button>' +
       '<p class="small muted center" style="margin-top:20px">對話只存在這支手機上，結束時由你決定要不要保留。</p>' +
       '<div class="foot-note">' + (adultMode ? '<a href="#/kid" style="color:inherit">小孩版</a> · ' : '') + '<a href="#/about" style="color:inherit">我們的原則與使用須知</a></div></div>');
   }
@@ -797,16 +797,16 @@
   }
   function parentDash(tab) {
     const kids = Store.kids();
-    tab = tab || (kids[0] && kids[0].id) || 'me';
+    if (!tab || tab === 'me' || !kids.some(k => k.id === tab)) tab = kids[0] ? kids[0].id : '';
     const recs = Store.records();
-    const list = tab === 'me' ? recs.filter(r => r.type === 'adult-talk') : recs.filter(r => r.kidId === tab);
+    const list = recs.filter(r => r.kidId === tab);
     const urgentCount = id => recs.filter(r => r.kidId === id && r.level === 'urgent' && !r.seen).length;
-    render(top('家長專區', '/', '<button data-go="/parent/settings" style="color:inherit">設定</button>') +
+    render(top('孩子的紀錄', '/', '<button data-go="/parent/settings" style="color:inherit">設定</button>') +
       '<div class="screen">' +
       '<div class="notice privacy"><b>這是孩子的真心話。</b>請不要直接拿著紀錄去問他，也不要轉告別人。用自然的方式關心，他才會願意繼續說。</div>' +
       '<div class="seg">' + kids.map(k => '<button class="' + (tab === k.id ? 'on' : '') + '" data-go="/parent/kid/' + k.id + '">' + esc(k.name) + (urgentCount(k.id) ? ' 🔴' : '') + '</button>').join('') +
-      '<button class="' + (tab === 'me' ? 'on' : '') + '" data-go="/parent/kid/me">我的紀錄</button></div>' +
-      (tab !== 'me' ? '<div class="small muted" style="margin:-6px 0 10px">⭐ ' + Store.stars(tab) + ' 顆星 · 📒 ' + Store.stickers(tab).length + ' 張貼紙 · 玩過 ' + Store.played(tab).length + ' 張情境卡</div>' : '') +
+      '</div>' +
+      '<div class="small muted" style="margin:-6px 0 10px">⭐ ' + Store.stars(tab) + ' 顆星 · 📒 ' + Store.stickers(tab).length + ' 張貼紙 · 玩過 ' + Store.played(tab).length + ' 張情境卡</div>' +
       (list.length ? list.map(r =>
         '<button class="rec" data-go="' + (r.type === 'adult-talk' ? '/adult/talk/' : '/parent/rec/') + r.id + '"><div class="row"><span>' + timeStr(r.time) + '</span><span class="badge ' + (r.level || 'normal') + '">' +
         (r.type === 'kid-scene' ? '情境練習' : r.type === 'kid-help' ? '找你幫忙' : levelName[r.level] || '紀錄') + '</span></div>' +

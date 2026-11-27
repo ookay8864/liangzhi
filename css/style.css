@@ -318,3 +318,6 @@ body.pinyin .daily rt { color: rgba(255,255,255,.8); }
 .pad-k { width: 72px; height: 72px; border-radius: 50%; background: var(--card); border: 1px solid var(--line); font-size: 28px; font-weight: 400; }
 .pad-k:active { background: #e8e6df; }
 .pad-k[data-k="⌫"] { border: none; background: none; font-size: 24px; color: var(--muted); }
+.lock-i { font-size: 12px; opacity: .6; }
+.choice .d { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.choice > span:nth-child(2) { min-width: 0; flex: 1; }
