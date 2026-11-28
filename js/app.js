@@ -105,9 +105,9 @@
     opts = opts || {};
     const kid = opts.kid || null;
     Lang.setZone(opts.zone || (kid ? 'kid' : 'adult'), kid && kid.pinyin);
-    document.body.classList.toggle('has-help', !!kid && !opts.noHelp);
+    document.body.classList.toggle('has-help', !!kid && !!opts.help);
     document.body.classList.toggle('zone-kid', (opts.zone || (kid ? 'kid' : 'adult')) === 'kid');
-    app.innerHTML = html + (kid && !opts.noHelp ? '<div class="helpbar"><button data-go="/kid/' + kid.id + '/help">找爸爸媽媽幫忙</button></div>' : '');
+    app.innerHTML = html + (kid && opts.help ? '<div class="helpbar"><button data-go="/kid/' + kid.id + '/help">找爸爸媽媽幫忙</button></div>' : '');
     if (kid && !opts.noHelp && !opts.noPal) Pal.mount(kid); else Pal.unmount();
     window.scrollTo(0, 0);
   }
@@ -216,12 +216,15 @@
     render(top('', kidMode ? '' : '/') +
       '<div class="screen"><div class="center" style="margin:16px 0 8px">' + buddy(88) + '</div>' +
       '<p class="center" style="font-size:18px;margin:0 0 24px">嗨！我是' + esc(NAME) + '，<br>點一下你的名字吧！</p>' +
-      '<div class="kid-grid">' + kids.map(k =>
-        '<button class="kid-card" data-go="/kid/' + k.id + (Pal.get(k.id) ? '' : '/palset') + '"><span class="avatar" style="background:' + k.color + '">' + esc(k.name.slice(0, 1)) + '</span>' + esc(k.name) + '</button>').join('') +
-      '</div><div class="label center" style="margin-top:22px">先選好你的小夥伴</div><div class="kid-grid pal-pick">' + kids.map(k => {
+      '<div class="kid-grid">' + kids.map(k => {
         const pp = Pal.get(k.id);
-        return '<button class="pal-set" data-go="/kid/' + k.id + '/palset"><span class="pal-set-art' + (pp && pp.type === 'cat' ? ' is-cat' : '') + '">' + (pp ? Pal.svg(pp, 'blank') : '🐾') + '</span><span>' + esc(k.name) + '的夥伴</span><span class="small muted">' + (pp ? (pp.type === 'cat' ? '小貓' : '火柴人') + ' · 點一下更換' : '還沒選，點一下') + '</span></button>';
-      }).join('') + '</div>' + '<div class="foot-note">' + (kidMode ? '<a href="#/parent" style="color:inherit">家長專區</a> · ' : '') + '<a href="#/about" style="color:inherit">原則與使用須知</a></div>' + '</div>', { zone: 'kid' });
+        return '<div class="kid-card2" style="--kc:' + k.color + '">' +
+          '<button class="kc-main" data-go="/kid/' + k.id + (pp ? '' : '/palset') + '">' +
+          '<span class="kc-art' + (pp && pp.type === 'cat' ? ' is-cat' : '') + '">' + (pp ? Pal.svg(pp, 'blank') : '<span class="kc-empty">🐾</span>') + '</span>' +
+          '<span class="kc-ground"></span><span class="kc-name">' + esc(k.name) + '</span></button>' +
+          '<button class="kc-pal" data-go="/kid/' + k.id + '/palset">' + (pp ? '換夥伴' : '先選夥伴') + '</button></div>';
+      }).join('') +
+      '</div>' + '<div class="foot-note">' + (kidMode ? '<a href="#/parent" style="color:inherit">家長專區</a> · ' : '') + '<a href="#/about" style="color:inherit">原則與使用須知</a></div>' + '</div>', { zone: 'kid' });
   }
 
   function dailyScene(kid) {
@@ -246,25 +249,28 @@
   }
 
   // 選夥伴（在選名字的首頁進來）：火柴人或小貓、顏色
-  function palSet(kid) {
+  function palSet(kid, fromPal) {
     const old = Pal.get(kid.id);
     let p = old ? JSON.parse(JSON.stringify(old)) : { type: 'stick', color: 'blue', happy: 0, wear: {} };
+    let savedNote = false;
     function draw() {
+      const back = fromPal ? '/kid/' + kid.id + '/pal' : '/kid';
       const swatches = p.type === 'stick'
         ? Pal.STICK_COLORS.map(c => '<button class="sw' + (p.color === c[0] ? ' on' : '') + '" data-c="' + c[0] + '" style="background:' + c[2] + '" aria-label="' + c[1] + '"></button>').join('')
         : Pal.CAT_COLORS.map(c => '<button class="sw-cat' + (p.color === c[0] ? ' on' : '') + '" data-c="' + c[0] + '"><span class="sw-mini">' + Pal.svg({ type: 'cat', color: c[0] }, 'blank') + '</span>' + c[1] + '</button>').join('');
-      render(top(kid.name + '的夥伴', old ? '/kid' : '/kid', '') +
+      render(top(kid.name + '的夥伴', back, '') +
         '<div class="screen"><div class="pal-preview ' + (p.type === 'cat' ? 'is-cat' : '') + '">' + Pal.svg(p, 'blank') + '</div>' +
         '<p class="center muted small" style="margin:4px 0 0">選一個陪你的小夥伴吧！</p>' +
         '<div class="label">夥伴</div><div class="seg" id="ptype"><button data-t="stick" class="' + (p.type === 'stick' ? 'on' : '') + '">火柴人</button><button data-t="cat" class="' + (p.type === 'cat' ? 'on' : '') + '">小貓</button></div>' +
         '<div class="label">顏色</div><div class="swatches">' + swatches + '</div>' +
-        '<button class="btn accent" id="palDone" style="margin-top:20px">就是它了！</button></div>', { zone: 'kid' });
+        '<button class="btn accent" id="palDone" style="margin-top:20px">就是它了！</button>' +
+        (savedNote ? '<div class="saved-note">✓ 選好了！想再換也可以繼續改。</div><button class="btn" data-go="' + (fromPal ? back : '/kid/' + kid.id) + '" style="margin-top:10px">' + (fromPal ? '回到我的夥伴' : '進去玩囉 ›') + '</button>' : '') + '</div>', { zone: 'kid' });
       app.querySelectorAll('#ptype [data-t]').forEach(b => b.onclick = () => {
         if (p.type === b.dataset.t) return;
-        p.type = b.dataset.t; p.color = p.type === 'cat' ? 'white' : 'blue'; draw();
+        p.type = b.dataset.t; p.color = p.type === 'cat' ? 'white' : 'blue'; savedNote = false; draw();
       });
-      app.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { p.color = b.dataset.c; draw(); });
-      document.getElementById('palDone').onclick = () => { Pal.save(kid.id, Pal.fixWear(p)); go('/kid/' + kid.id); };
+      app.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { p.color = b.dataset.c; savedNote = false; draw(); });
+      document.getElementById('palDone').onclick = () => { const cur = Pal.get(kid.id); if (cur) { cur.type = p.type; cur.color = p.color; p = cur; } Pal.save(kid.id, Pal.fixWear(p)); savedNote = true; draw(); window.scrollTo(0, document.body.scrollHeight); };
     }
     draw();
   }
@@ -290,7 +296,7 @@
         '<div class="label">現在的裝備</div><div class="worn">' + (worn.length ? worn.map(it => '<span class="worn-tag">' + it.icon + ' ' + it.name + '</span>').join('') : '<span class="small muted">還沒有穿戴，從下面選一件吧</span>') + '</div>' +
         '<div class="label">免費裝備</div><div class="items">' + Pal.freeFor(p).map(it => itemBtn(it, true)).join('') + '</div>' +
         '<div class="label">解鎖裝備（讓夥伴開心就能解鎖）</div><div class="items">' + Pal.ITEMS.map(it => itemBtn(it, n >= it.need, '再開心 ' + (it.need - n) + ' 次')).join('') + '</div>' +
-        '<button class="btn" data-go="/kid/' + kid.id + '/palset" style="margin-top:16px">換夥伴或顏色</button>' +
+        '<button class="btn" data-go="/kid/' + kid.id + '/palset?from=pal" style="margin-top:16px">換夥伴或顏色</button>' +
         '<button class="btn accent" id="palDone" style="margin-top:10px">好了</button></div>', { kid, noPal: true });
       app.querySelectorAll('[data-it]').forEach(b => b.onclick = () => {
         const it = Pal.ALL.find(x => x.id === b.dataset.it); p.wear = p.wear || {};
@@ -515,9 +521,9 @@
           '<div class="adult-intro">' + lamp(46) + '<p>' + esc(greet) + '</p>' + speakBtn(greet, '') + '</div>') +
       '<div class="chat" id="chat" style="margin-top:18px"></div>' +
       '<div id="tail"></div>' +
-      '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或按麥克風說話' : '例如：同事拜託我幫他隱瞞一個錯誤…', topHtml) +
+      '<div class="composer" id="composer">' + composerHtml(isKid ? '寫下來，或用鍵盤的 🎤 說話' : '例如：同事拜託我幫他隱瞞一個錯誤…', topHtml) +
       (isKid ? '' : '<div class="end-row"><button id="endBtn">結束對話</button><div class="ai-note">AI 回答僅供參考</div></div>') + '</div>' +
-      '</div>', isKid ? { kid } : null);
+      '</div>', isKid ? { kid, help: true } : null);
 
     const chat = document.getElementById('chat');
     function rawSnapshot() { return JSON.parse(JSON.stringify(msgs.filter(m => !(m.role === 'summary' && m.loading)))); }
@@ -1045,7 +1051,7 @@
       if (p[2] === 'help') return kidHelp(kid);
       if (p[2] === 'stickers') return stickerBook(kid);
       if (p[2] === 'pal') return Pal.get(kid.id) ? palPage(kid) : palSet(kid);
-      if (p[2] === 'palset') return palSet(kid);
+      if (p[2] === 'palset') return palSet(kid, /from=pal/.test(query || ''));
       return kidHome(kid);
     }
     if (p[0] === 'adult') {

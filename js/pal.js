@@ -12,14 +12,17 @@ window.Pal = (function () {
     { id: 'scarf', name: '圍巾', need: 3, slot: 'neck', icon: '🧣' },
     { id: 'hat', name: '派對帽', need: 6, slot: 'head', icon: '🎉' },
     { id: 'bow', name: '蝴蝶結', need: 10, slot: 'head', icon: '🎀' },
-    { id: 'crown', name: '皇冠', need: 15, slot: 'head', icon: '👑' }
+    { id: 'crown', name: '皇冠', need: 15, slot: 'head', icon: '👑' },
+    { id: 'shades', name: '酷墨鏡', need: 20, slot: 'face', icon: '🕶️' },
+    { id: 'wings', name: '小翅膀', need: 25, slot: 'wings', icon: '🪽' }
   ];
   // 免費裝備（一開始就能穿）；cat/stick 標示只給某種夥伴
   const FREE = [
     { id: 'cap', name: '棒球帽', slot: 'head', icon: '🧢' },
     { id: 'bag', name: '小書包', slot: 'back', icon: '🎒' },
     { id: 'pants', name: '短褲', slot: 'legs', icon: '🩳', only: 'stick' },
-    { id: 'bell', name: '鈴鐺項圈', slot: 'neck', icon: '🔔', only: 'cat' }
+    { id: 'bell', name: '鈴鐺項圈', slot: 'neck', icon: '🔔', only: 'cat' },
+    { id: 'glasses', name: '圓眼鏡', slot: 'face', icon: '👓' }
   ];
   const ALL = FREE.concat(ITEMS);
   function fits(it, p) { return !it.only || it.only === p.type; }
@@ -54,6 +57,11 @@ window.Pal = (function () {
         '<path d="M' + (neck[0] + 5) + ' ' + (neck[1] + 3) + ' l3 11" stroke="#E24B4A" stroke-width="4" stroke-linecap="round"/>';
     }
     const [hx, hy] = head;
+    const eyes = p.type === 'cat' ? [[18, 31], [30, 31]] : [[24, 17], [36, 17]];
+    if (w.wings === 'wings') { const [wx, wy] = p.type === 'cat' ? [50, 34] : [30, 46];
+      s = '<g opacity=".9"><path d="M' + wx + ' ' + wy + ' Q' + (wx - 20) + ' ' + (wy - 16) + ' ' + (wx - 16) + ' ' + (wy + 4) + ' Z" fill="#B5D4F4" stroke="#378ADD" stroke-width="1.2"/><path d="M' + wx + ' ' + wy + ' Q' + (wx + 20) + ' ' + (wy - 16) + ' ' + (wx + 16) + ' ' + (wy + 4) + ' Z" fill="#B5D4F4" stroke="#378ADD" stroke-width="1.2"/></g>' + s; }
+    if (w.face === 'glasses' || w.face === 'shades') { const f = w.face === 'shades' ? '#2C2C2A' : 'none';
+      s += eyes.map(e => '<circle cx="' + e[0] + '" cy="' + e[1] + '" r="4.6" fill="' + f + '" stroke="#2C2C2A" stroke-width="1.6"/>').join('') + '<path d="M' + (eyes[0][0] + 4.6) + ' ' + eyes[0][1] + ' L' + (eyes[1][0] - 4.6) + ' ' + eyes[1][1] + '" stroke="#2C2C2A" stroke-width="1.6"/>'; }
     if (w.legs === 'pants' && p.type !== 'cat') s += '<path d="M23 64 L37 64 L40 79 L33 79 L30 70 L27 79 L20 79 Z" fill="#378ADD"/>';
     if (w.back === 'bag') s += p.type === 'cat'
       ? '<rect x="44" y="27" width="16" height="13" rx="4" fill="#D85A30"/><rect x="48" y="31" width="8" height="4" rx="1.5" fill="#F0997B"/>'
