@@ -405,3 +405,21 @@ body:not(.has-help) .pal-layer { bottom: calc(10px + var(--safe-b)); }
 .kc-name { font-size: 20px; font-weight: 700; margin-top: 10px; color: var(--kc); }
 .kc-pal { margin: 6px 12px 12px; padding: 7px; border-radius: 12px; font-size: 13px; color: var(--muted); background: var(--bg); }
 .saved-note { text-align: center; color: var(--accent); font-weight: 600; margin-top: 12px; }
+
+/* 爬牆、坐在上面、打字時坐著等 */
+.pal-layer { overflow: visible; }
+.pal.climb .pal-art { transform: rotate(-90deg); }
+.pal.climb.on-left .pal-art { transform: rotate(90deg) scaleX(-1); }
+.pal.climb .lg1, .pal.climb .ar2 { animation: palLeg .3s ease-in-out infinite alternate; }
+.pal.climb .lg2, .pal.climb .ar1 { animation: palLeg .3s ease-in-out infinite alternate-reverse; }
+.pal.perch .ar2 { animation: palWave .4s ease-in-out infinite alternate; }
+@keyframes palWave { from { transform: rotate(-110deg); } to { transform: rotate(-150deg); } }
+.pal.is-stick.sit .pal-art svg { transform: translateY(12px); }
+.pal.is-stick.flip.sit .pal-art svg { transform: translateY(12px) scaleX(-1); }
+.pal.is-stick.sit .lg1 { transform: rotate(-80deg); }
+.pal.is-stick.sit .lg2 { transform: rotate(-58deg); }
+.pal.is-stick.sit .ar1, .pal.is-stick.sit .ar2 { transform: rotate(-35deg); }
+.pal.sit .pal-art { animation: palTilt 2.6s ease-in-out infinite alternate; }
+@keyframes palTilt { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.pal.is-cat.sit .pal-art svg { transform: translateY(4px) scaleY(.94); }
+.pal.is-cat.flip.sit .pal-art svg { transform: translateY(4px) scaleY(.94) scaleX(-1); }

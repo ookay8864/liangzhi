@@ -129,10 +129,11 @@ window.Pal = (function () {
   function svg(p, mood) { return p.type === 'cat' ? cat(p, mood) : stick(p, mood); }
 
   // ---------- 在畫面上走動 ----------
-  let layer = null, el = null, kid = null, x = 30, timer = null, moodTimer = null, quiet = false;
+  let layer = null, el = null, kid = null, x = 30, y = 0, timer = null, moodTimer = null, quiet = false, lastClimb = 0, climbing = false;
+  function pos(dur) { if (!el) return; el.style.transition = dur ? 'transform ' + dur + 's ease-in-out' : 'none'; el.style.transform = 'translate(' + x + 'px,' + y + 'px)'; }
   function unmount() {
     clearTimeout(timer); clearTimeout(moodTimer);
-    if (layer) layer.remove(); layer = null; el = null; kid = null;
+    if (layer) layer.remove(); layer = null; el = null; kid = null; climbing = false; y = 0;
     document.body.classList.remove('has-pal');
   }
   function mount(k) {
@@ -144,25 +145,62 @@ window.Pal = (function () {
     layer = document.createElement('div'); layer.className = 'pal-layer';
     el = document.createElement('div'); el.className = 'pal ' + (p.type === 'cat' ? 'is-cat' : 'is-stick');
     el.setAttribute('role', 'button'); el.setAttribute('aria-label', '我的夥伴，點一下摸摸它');
-    el.innerHTML = '<div class="pal-bubble"></div><div class="pal-art">' + svg(p, 'blank') + '</div>';
+    el.innerHTML = '<div class="pal-bubble"></div><div class="pal-art">' + svg(p, face(p)) + '</div>';
     layer.appendChild(el); document.body.appendChild(layer);
-    x = 20 + Math.random() * 120; el.style.transform = 'translateX(' + x + 'px)';
+    x = 20 + Math.random() * 120; y = 0; pos(0);
+    lastClimb = Date.now();
     el.onclick = pet;
+    if (quiet) sitDown();
     timer = setTimeout(wander, 1200);
   }
   function maxX() { return Math.max(40, Math.min(window.innerWidth, 520) - (el && el.classList.contains('is-cat') ? 90 : 60) - 20); }
+  function face4(f) { const p = kid && get(kid.id); if (el && p) el.querySelector('.pal-art').innerHTML = svg(p, f || face(p)); }
+  function walkTo(nx, then) {
+    el.classList.toggle('flip', el.classList.contains('is-cat') ? nx > x : nx < x);
+    el.classList.add('walk');
+    const dur = Math.max(.4, Math.min(3.5, Math.abs(nx - x) / 60));
+    x = nx; el.style.transition = 'transform ' + dur + 's linear'; el.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    timer = setTimeout(() => { if (!el) return; el.classList.remove('walk'); then(); }, dur * 1000);
+  }
+  // 大約每 20 秒：走到旁邊，沿著邊緣爬上去，坐一下揮揮手，再滑下來
+  function climb() {
+    climbing = true; lastClimb = Date.now();
+    const left = x < maxX() / 2, edge = left ? 4 : maxX();
+    walkTo(edge, () => {
+      if (!el || quiet) { climbing = false; return next(); }
+      el.classList.add('climb', left ? 'on-left' : 'on-right');
+      y = -Math.round(Math.min(window.innerHeight * 0.38, 320)); pos(2.6);
+      timer = setTimeout(() => {
+        if (!el) return;
+        el.classList.remove('climb'); el.classList.add('perch'); face4('happy'); say(['嗨！我在這裡～', '上面看得好遠！', '你看到我了嗎？'][Math.floor(Math.random() * 3)]);
+        timer = setTimeout(() => {
+          if (!el) return;
+          el.classList.remove('perch'); face4(); y = 0; pos(1.2);
+          timer = setTimeout(() => { if (!el) return; el.classList.remove('on-left', 'on-right'); climbing = false; next(); }, 1250);
+        }, 3000);
+      }, 2650);
+    });
+  }
+  function next() { timer = setTimeout(wander, 1800 + Math.random() * 3000); }
   function wander() {
     if (!el) return;
     if (quiet) { timer = setTimeout(wander, 1500); return; }
+    if (Date.now() - lastClimb > 20000) return climb();
     const nx = 10 + Math.random() * maxX();
     if (Math.abs(nx - x) < 50) { timer = setTimeout(wander, 1800); return; }
-    el.classList.toggle('flip', el.classList.contains('is-cat') ? nx > x : nx < x);
-    el.classList.add('walk');
-    const dur = Math.min(3.5, Math.abs(nx - x) / 60);
-    el.style.transition = 'transform ' + dur + 's linear';
-    x = nx; el.style.transform = 'translateX(' + x + 'px)';
-    timer = setTimeout(() => { if (!el) return; el.classList.remove('walk'); timer = setTimeout(wander, 1800 + Math.random() * 3500); }, dur * 1000);
+    walkTo(nx, next);
   }
+  // 打字的時候：馬上回到地上，坐下來，歪頭看著，在旁邊等
+  function sitDown() {
+    if (!el) return;
+    clearTimeout(timer); climbing = false;
+    el.classList.remove('walk', 'climb', 'perch', 'on-left', 'on-right');
+    if (y) { y = 0; pos(.6); }
+    el.classList.add('sit'); face4('blush');
+    say(['我在旁邊等你～', '慢慢寫，不急喔', '我陪著你'][Math.floor(Math.random() * 3)]);
+    timer = setTimeout(wander, 1500);
+  }
+  function standUp() { if (!el) return; el.classList.remove('sit'); face4(); lastClimb = Date.now(); }
   function say(t) {
     if (!el) return;
     const b = el.querySelector('.pal-bubble'); b.textContent = Lang.conv(t); b.classList.add('show');
@@ -181,7 +219,7 @@ window.Pal = (function () {
     const p = get(kid.id); if (!p) return;
     el.querySelector('.pal-art').innerHTML = svg(p, mood);
     clearTimeout(moodTimer);
-    moodTimer = setTimeout(() => { if (el && kid) el.querySelector('.pal-art').innerHTML = svg(get(kid.id), face(get(kid.id))); }, ms);
+    moodTimer = setTimeout(() => { if (el && kid) el.querySelector('.pal-art').innerHTML = svg(get(kid.id), quiet ? 'blush' : face(get(kid.id))); }, ms);
   }
   function pet() {
     if (!el) return;
@@ -205,8 +243,8 @@ window.Pal = (function () {
     }
     return unlocked;
   }
-  document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches('textarea, input')) quiet = true; });
-  document.addEventListener('focusout', e => { if (e.target.matches && e.target.matches('textarea, input')) quiet = false; });
+  document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches('textarea, input')) { quiet = true; sitDown(); } });
+  document.addEventListener('focusout', e => { if (e.target.matches && e.target.matches('textarea, input')) { quiet = false; standUp(); } });
 
   return { STICK_COLORS, CAT_COLORS, ITEMS, FREE, ALL, fits, freeFor, fixWear, moodInfo, drankToday, drink, get, save, svg, mount, unmount, happy };
 })();
