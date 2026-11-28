@@ -14,6 +14,31 @@ window.Pal = (function () {
     { id: 'bow', name: '蝴蝶結', need: 10, slot: 'head', icon: '🎀' },
     { id: 'crown', name: '皇冠', need: 15, slot: 'head', icon: '👑' }
   ];
+  // 免費裝備（一開始就能穿）；cat/stick 標示只給某種夥伴
+  const FREE = [
+    { id: 'cap', name: '棒球帽', slot: 'head', icon: '🧢' },
+    { id: 'bag', name: '小書包', slot: 'back', icon: '🎒' },
+    { id: 'pants', name: '短褲', slot: 'legs', icon: '🩳', only: 'stick' },
+    { id: 'bell', name: '鈴鐺項圈', slot: 'neck', icon: '🔔', only: 'cat' }
+  ];
+  const ALL = FREE.concat(ITEMS);
+  function fits(it, p) { return !it.only || it.only === p.type; }
+  function freeFor(p) { return FREE.filter(it => fits(it, p)); }
+  function fixWear(p) { const w = p.wear || {}; Object.keys(w).forEach(k => { const it = ALL.find(x => x.id === w[k]); if (it && !fits(it, p)) w[k] = ''; }); p.wear = w; return p; }
+
+  // ---------- 心情：每天從「有點沒精神」開始，陪它就會升級，不會往下扣 ----------
+  function today() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+  function level(p) { return p.moodDay === today() ? Math.min(2, p.mood || 0) : 0; }
+  const MOODS = [
+    { name: '有點沒精神', icon: '😐', face: 'tired', short: '它有點悶悶的，去看看它吧', say: ['我有點悶悶的，陪我玩一下好嗎？', '今天還沒有人陪我…', '我有點口渴了'] },
+    { name: '還不錯', icon: '🙂', face: 'blank', short: '它今天還不錯喔', say: ['今天還不錯喔！', '謝謝你來看我', '再陪我一下下'] },
+    { name: '很開心', icon: '😄', face: 'happy', short: '它今天很開心！', say: ['謝謝你陪我！我好開心！', '你是最棒的朋友！', '今天好快樂～'] }
+  ];
+  function moodInfo(p) { const l = level(p), m = MOODS[l]; return { level: l, name: m.name, icon: m.icon, face: m.face, short: m.short, say: m.say[Math.floor(Math.random() * m.say.length)] }; }
+  function bump(p) { const l = level(p); p.moodDay = today(); p.mood = Math.min(2, l + 1); }
+  function drankToday(p) { return p.drankDay === today(); }
+  function drink(kidId) { const p = get(kidId); if (!p || drankToday(p)) return; p.drankDay = today(); bump(p); save(kidId, p); }
+  function face(p) { return moodInfo(p).face; }
   const BG = 'var(--bg)', INK = '#2C2C2A';
 
   function get(kidId) { return Store.get('pal_' + kidId, null); }
@@ -29,6 +54,12 @@ window.Pal = (function () {
         '<path d="M' + (neck[0] + 5) + ' ' + (neck[1] + 3) + ' l3 11" stroke="#E24B4A" stroke-width="4" stroke-linecap="round"/>';
     }
     const [hx, hy] = head;
+    if (w.legs === 'pants' && p.type !== 'cat') s += '<path d="M23 64 L37 64 L40 79 L33 79 L30 70 L27 79 L20 79 Z" fill="#378ADD"/>';
+    if (w.back === 'bag') s += p.type === 'cat'
+      ? '<rect x="44" y="27" width="16" height="13" rx="4" fill="#D85A30"/><rect x="48" y="31" width="8" height="4" rx="1.5" fill="#F0997B"/>'
+      : '<rect x="33" y="40" width="12" height="15" rx="3" fill="#D85A30"/><rect x="35" y="45" width="8" height="4" rx="1.5" fill="#F0997B"/><path d="M33 42 L30 40" stroke="#993C1D" stroke-width="2" stroke-linecap="round"/>';
+    if (w.neck === 'bell') s += '<path d="M' + (neck[0] - 12) + ' ' + (neck[1] - 4) + ' Q' + neck[0] + ' ' + (neck[1] + 4) + ' ' + (neck[0] + 4) + ' ' + (neck[1] - 6) + '" fill="none" stroke="#E24B4A" stroke-width="3" stroke-linecap="round"/><circle cx="' + (neck[0] - 3) + '" cy="' + (neck[1] + 2) + '" r="3.5" fill="#EF9F27" stroke="#BA7517" stroke-width="1"/>';
+    if (w.head === 'cap') s += '<path d="M' + (hx - 13) + ' ' + (hy + 9) + ' Q' + (hx - 12) + ' ' + (hy - 6) + ' ' + hx + ' ' + (hy - 6) + ' Q' + (hx + 12) + ' ' + (hy - 6) + ' ' + (hx + 13) + ' ' + (hy + 9) + ' Z" fill="#185FA5"/><path d="M' + (hx + 6) + ' ' + (hy + 9) + ' L' + (hx + 22) + ' ' + (hy + 10) + '" stroke="#0C447C" stroke-width="3.5" stroke-linecap="round"/>';
     if (w.head === 'hat') s += '<path d="M' + (hx - 9) + ' ' + (hy + 2) + ' L' + hx + ' ' + (hy - 18) + ' L' + (hx + 9) + ' ' + (hy + 2) + ' Z" fill="#7F77DD"/><circle cx="' + hx + '" cy="' + (hy - 19) + '" r="3" fill="#EF9F27"/><circle cx="' + (hx - 2) + '" cy="' + (hy - 6) + '" r="1.6" fill="#fff"/><circle cx="' + (hx + 3) + '" cy="' + (hy - 1) + '" r="1.6" fill="#fff"/>';
     if (w.head === 'crown') s += '<path d="M' + (hx - 11) + ' ' + (hy + 2) + ' L' + (hx - 11) + ' ' + (hy - 9) + ' L' + (hx - 5) + ' ' + (hy - 3) + ' L' + hx + ' ' + (hy - 12) + ' L' + (hx + 5) + ' ' + (hy - 3) + ' L' + (hx + 11) + ' ' + (hy - 9) + ' L' + (hx + 11) + ' ' + (hy + 2) + ' Z" fill="#EF9F27" stroke="#BA7517" stroke-width="1"/>';
     if (w.head === 'bow') s += '<g transform="translate(' + (hx + 8) + ' ' + (hy + 1) + ')"><path d="M0 0 L-8 -6 L-8 6 Z M0 0 L8 -6 L8 6 Z" fill="#D4537E"/><circle r="2.6" fill="#ED93B1"/></g>';
@@ -40,6 +71,7 @@ window.Pal = (function () {
     const c = stickColor(p.color);
     let face = '';
     if (mood === 'happy') face = '<circle cx="24" cy="17" r="2.2" fill="' + c + '"/><circle cx="36" cy="17" r="2.2" fill="' + c + '"/><path d="M22 24 Q30 32 38 24" fill="none" stroke="' + c + '" stroke-width="2.4" stroke-linecap="round"/><ellipse cx="19" cy="23" rx="3" ry="2" fill="#F4C0D1"/><ellipse cx="41" cy="23" rx="3" ry="2" fill="#F4C0D1"/>';
+    if (mood === 'tired') face = '<path d="M21 18 L27 18 M33 18 L39 18" stroke="' + c + '" stroke-width="2.2" stroke-linecap="round"/><path d="M25 26 L35 26" stroke="' + c + '" stroke-width="2.2" stroke-linecap="round"/>';
     if (mood === 'blush') face = '<ellipse cx="20" cy="23" rx="3.5" ry="2.2" fill="#F4C0D1"/><ellipse cx="40" cy="23" rx="3.5" ry="2.2" fill="#F4C0D1"/>';
     return '<svg viewBox="0 0 60 110" width="100%" height="100%">' +
       '<line class="lg1" x1="30" y1="66" x2="18" y2="96" stroke="' + c + '" stroke-width="3.5" stroke-linecap="round"/>' +
@@ -59,7 +91,9 @@ window.Pal = (function () {
     if (p.color === 'calico') patches =
       '<path d="M46 34 Q58 30 64 40 Q56 46 46 42 Z" fill="#EF9F27"/><path d="M60 48 Q68 46 70 54 Q62 58 58 54 Z" fill="#444441"/>' +
       '<path d="M12 22 Q16 16 22 18 Q20 26 14 27 Z" fill="#EF9F27"/><path d="M29 16 L33 8 L36 19 Z" fill="#444441"/>';
-    const eyes = mood === 'happy'
+    const eyes = mood === 'tired'
+      ? '<path d="M15 31 L21 31 M27 31 L33 31" stroke="#2C2C2A" stroke-width="2" stroke-linecap="round"/>'
+      : mood === 'happy'
       ? '<path d="M15 31 Q18 28 21 31" fill="none" stroke="#2C2C2A" stroke-width="2" stroke-linecap="round"/><path d="M27 31 Q30 28 33 31" fill="none" stroke="#2C2C2A" stroke-width="2" stroke-linecap="round"/>'
       : '<circle cx="18" cy="31" r="2.2" fill="#2C2C2A"/><circle cx="30" cy="31" r="2.2" fill="#2C2C2A"/>';
     const mouth = mood === 'happy'
@@ -96,7 +130,7 @@ window.Pal = (function () {
   function mount(k) {
     const p = get(k.id);
     if (!p) { unmount(); return; }
-    if (layer && kid && kid.id === k.id) { el.querySelector('.pal-art').innerHTML = svg(p, 'blank'); return; }
+    if (layer && kid && kid.id === k.id) { el.querySelector('.pal-art').innerHTML = svg(p, face(p)); return; }
     unmount(); kid = k;
     document.body.classList.add('has-pal');
     layer = document.createElement('div'); layer.className = 'pal-layer';
@@ -139,7 +173,7 @@ window.Pal = (function () {
     const p = get(kid.id); if (!p) return;
     el.querySelector('.pal-art').innerHTML = svg(p, mood);
     clearTimeout(moodTimer);
-    moodTimer = setTimeout(() => { if (el && kid) el.querySelector('.pal-art').innerHTML = svg(get(kid.id), 'blank'); }, ms);
+    moodTimer = setTimeout(() => { if (el && kid) el.querySelector('.pal-art').innerHTML = svg(get(kid.id), face(get(kid.id))); }, ms);
   }
   function pet() {
     if (!el) return;
@@ -149,7 +183,7 @@ window.Pal = (function () {
   // 開心：出現笑臉，累積開心次數，可能解鎖配件
   function happy(k, msg) {
     const p = get(k.id); if (!p) return null;
-    p.happy = (p.happy || 0) + 1;
+    p.happy = (p.happy || 0) + 1; bump(p);
     let unlocked = null;
     ITEMS.forEach(it => {
       if (p.happy === it.need) {
@@ -166,5 +200,5 @@ window.Pal = (function () {
   document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches('textarea, input')) quiet = true; });
   document.addEventListener('focusout', e => { if (e.target.matches && e.target.matches('textarea, input')) quiet = false; });
 
-  return { STICK_COLORS, CAT_COLORS, ITEMS, get, save, svg, mount, unmount, happy };
+  return { STICK_COLORS, CAT_COLORS, ITEMS, FREE, ALL, fits, freeFor, fixWear, moodInfo, drankToday, drink, get, save, svg, mount, unmount, happy };
 })();
