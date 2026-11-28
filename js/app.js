@@ -484,7 +484,8 @@
       '<div class="small muted" id="vdesc" style="margin-top:8px"></div><button class="btn" id="verDone" style="margin-top:10px;padding:10px">好了</button></div>';
     render(top(isKid ? '說說我的煩惱' : '說出我的困境', base, isKid ? starPill(kid) : '') +
       '<div class="screen" style="padding-bottom:' + (isKid ? '150px' : '40px') + '">' +
-      '<div class="buddy">' + (isKid ? buddy(44) : lamp(44)) + '<div class="msg-ai" style="flex:1"><div class="body"><p>' + esc(greet) + '</p></div><div class="foot">' + speakBtn(greet) + '</div></div></div>' +
+      (isKid ? '<div class="buddy">' + buddy(44) + '<div class="msg-ai" style="flex:1"><div class="body"><p>' + esc(greet) + '</p></div><div class="foot">' + speakBtn(greet) + '</div></div></div>'
+        : '<div class="adult-intro">' + lamp(30) + '<p>' + esc(greet) + '</p>' + speakBtn(greet, '') + '</div>') +
       (isKid ? '' : '<button class="small muted center keep-note" id="keepNote">' + (saved ? '這是保留的對話，會自動更新。' : '🔒 沒有保留的對話，離開後就會刪除。') + ' <u>隱私說明</u></button>') +
       '<div class="chat" id="chat" style="margin-top:18px"></div>' +
       '<div id="tail"></div>' +
